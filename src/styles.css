@@ -88,3 +88,9 @@ h1, h2, h3 { margin: 0 0 12px; }
   .layout { grid-template-columns: 1fr; padding: 16px; }
   .cart { position: static; }
 }
+
+.btn:disabled { opacity: 0.6; cursor: default; }
+.switch { margin: 0; font-size: 14px; text-align: center; color: #4b5563; }
+.link { background: none; border: none; padding: 0; color: #2563eb; cursor: pointer; font-size: 14px; }
+.link:hover { text-decoration: underline; }
+.loading { text-align: center; margin-top: 40vh; color: #6b7280; }
