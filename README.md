@@ -25,3 +25,7 @@ cd shop-frontend && npm install && npm run dev   # http://localhost:5173
 Log in with the demo account `demo@shop.com` / `demo123`.
 
 The original combined code is still in this branch's git history.
+
+## New: AI POC — LLM, RAG and Agent (Python)
+
+The [`ai-agent-rag-poc/`](ai-agent-rag-poc) folder is a small, interview-friendly demo that builds AI up in three steps: a plain LLM call, RAG written from scratch, and a tool-using agent. See [ai-agent-rag-poc/README.md](ai-agent-rag-poc/README.md).
