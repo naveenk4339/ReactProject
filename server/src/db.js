@@ -36,6 +36,29 @@ db.exec(`
     qty        INTEGER NOT NULL CHECK (qty > 0),
     PRIMARY KEY (user_id, product_id)
   );
+
+  -- Amounts are stored in cents to avoid rounding errors.
+  -- Only the card brand and last 4 digits are kept, never the full number or CVV.
+  CREATE TABLE IF NOT EXISTS orders (
+    id                 TEXT PRIMARY KEY,
+    user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    total_items        INTEGER NOT NULL,
+    total_amount_cents INTEGER NOT NULL,
+    status             TEXT NOT NULL,
+    card_brand         TEXT NOT NULL,
+    card_last4         TEXT NOT NULL,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS order_items (
+    order_id         TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id       INTEGER NOT NULL REFERENCES products(id),
+    name             TEXT NOT NULL,
+    unit_price_cents INTEGER NOT NULL,
+    qty              INTEGER NOT NULL,
+    line_total_cents INTEGER NOT NULL,
+    PRIMARY KEY (order_id, product_id)
+  );
 `);
 
 const SEED_PRODUCTS = [

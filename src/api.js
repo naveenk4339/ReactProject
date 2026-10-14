@@ -21,7 +21,11 @@ async function request(path, { method = 'GET', body } = {}) {
   }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const error = new Error(data.error || `Request failed (${res.status})`);
+    error.fields = data.fields;
+    throw error;
+  }
   return data;
 }
 
@@ -34,4 +38,6 @@ export const api = {
   cart: () => request('/cart'),
   setQty: (productId, qty) => request(`/cart/${productId}`, { method: 'PUT', body: { qty } }),
   clearCart: () => request('/cart', { method: 'DELETE' }),
+  checkout: (card) => request('/checkout', { method: 'POST', body: { card } }),
+  order: (orderId) => request(`/orders/${encodeURIComponent(orderId)}`),
 };

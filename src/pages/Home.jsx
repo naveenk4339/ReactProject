@@ -100,7 +100,12 @@ export default function Home({ user, onLogout }) {
             <div><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
           </div>
           {cartLines.length > 0 && (
-            <button className="btn" onClick={clearCart}>Clear cart</button>
+            <div className="cart-actions">
+              <button className="btn primary" onClick={() => navigate('/checkout')}>
+                Checkout · {formatPrice(totalPrice)}
+              </button>
+              <button className="btn" onClick={clearCart}>Clear cart</button>
+            </div>
           )}
         </aside>
       </main>

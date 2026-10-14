@@ -94,3 +94,35 @@ h1, h2, h3 { margin: 0 0 12px; }
 .link { background: none; border: none; padding: 0; color: #2563eb; cursor: pointer; font-size: 14px; }
 .link:hover { text-decoration: underline; }
 .loading { text-align: center; margin-top: 40vh; color: #6b7280; }
+
+/* Checkout */
+.cart-actions { display: flex; flex-direction: column; gap: 8px; }
+a.btn { text-decoration: none; text-align: center; display: inline-block; color: inherit; }
+a.btn.primary { color: #fff; }
+.checkout-page { max-width: 900px; margin: 0 auto; padding: 24px; }
+.back-link { color: #2563eb; text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 16px; }
+.checkout-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.payment-form { display: flex; flex-direction: column; gap: 14px; }
+.payment-form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 500; min-width: 0; }
+.payment-form input { padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 15px; width: 100%; }
+.payment-form input:focus { outline: 2px solid #2563eb; border-color: transparent; }
+.payment-form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-error { color: #dc2626; font-size: 13px; font-weight: 400; }
+.brand { font-weight: 400; color: #6b7280; margin-left: 6px; }
+.small { font-size: 13px; margin: 0; }
+
+/* Order confirmation */
+.page-center { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.narrow { max-width: 360px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
+.confirmation { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+.approved-badge { align-self: center; background: #dcfce7; color: #166534; font-weight: 600; padding: 6px 14px; border-radius: 999px; }
+.approved-amount { text-align: center; font-size: 36px; font-weight: 700; margin: 0; }
+.order-meta { margin: 0; }
+.order-meta div { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+.order-meta dt { color: #6b7280; }
+.order-meta dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  .checkout-page { padding: 16px; }
+  .checkout-layout { grid-template-columns: 1fr; }
+}

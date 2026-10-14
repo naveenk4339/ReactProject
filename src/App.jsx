@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Home from './pages/Home.jsx';
+import Checkout from './pages/Checkout.jsx';
+import OrderConfirmation from './pages/OrderConfirmation.jsx';
 import { api, getToken, setToken } from './api.js';
 
 export default function App() {
@@ -42,6 +44,8 @@ export default function App() {
         path="/home"
         element={user ? <Home user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />}
       />
+      <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login" replace />} />
+      <Route path="/order/:orderId" element={user ? <OrderConfirmation /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={user ? '/home' : '/login'} replace />} />
     </Routes>
   );
