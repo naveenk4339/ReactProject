@@ -1,0 +1,6 @@
+AutoMart Delivery
+
+Free home delivery is available within 50 miles of any AutoMart store.
+Beyond 50 miles, delivery costs 2 dollars per extra mile.
+Delivery usually takes 3 to 5 business days after payment is confirmed.
+Customers can also pick up the car from the store on the same day.

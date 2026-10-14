@@ -1,0 +1,6 @@
+AutoMart Return Policy
+
+Customers can return a car within 7 days of delivery if it has been driven less than 300 miles.
+A restocking fee of 2 percent of the car price is charged on every return.
+Cars bought on clearance sale cannot be returned.
+To start a return, the customer must email returns@automart.example with the order number.
