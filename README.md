@@ -7,7 +7,12 @@ This project has been split into two repositories:
 | [shop-frontend](https://github.com/naveenk4339/shop-frontend) | React (Vite) UI: login, cart with totals, card checkout, order confirmation |
 | [shop-backend](https://github.com/naveenk4339/shop-backend) | Node.js (Express + SQLite) API: users, carts, simulated card payments, orders |
 
-## Run
+## New: AutoMart car shop (Angular + Java)
+
+The [`car-shop/`](car-shop) module is an online car store with an Angular frontend and a Spring Boot (Java) backend:
+car catalog with images and prices, cart, online card payment and bill/PDF invoice generation. See [car-shop/README.md](car-shop/README.md).
+
+## Run the React shop
 
 ```bash
 git clone https://github.com/naveenk4339/shop-backend
