@@ -126,3 +126,5 @@ a.btn.primary { color: #fff; }
   .checkout-page { padding: 16px; }
   .checkout-layout { grid-template-columns: 1fr; }
 }
+
+.demo-hint { margin: 0; font-size: 13px; text-align: center; color: #4b5563; background: #f3f4f6; border-radius: 6px; padding: 8px; }

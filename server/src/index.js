@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import db from './db.js';
-import { createSession, hashPassword, requireAuth, verifyPassword } from './auth.js';
+import { createSession, hashPassword, requireAuth, seedDemoUser, verifyPassword } from './auth.js';
 import { chargeCard, newOrderId, validateCard } from './payment.js';
+
+seedDemoUser();
 
 const app = express();
 app.use(cors());

@@ -50,7 +50,10 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Create one** to register, then log in.
+Open http://localhost:5173 and log in with the demo account **demo@shop.com** / **demo123**, or click **Create one** to register your own.
+(The demo account is created on server start; set `SEED_DEMO_USER=false` to skip it.)
+
+If login says *Cannot reach the server*, the backend isn't running: start it with `cd server && npm start`.
 The frontend forwards `/api` requests to the backend (see `vite.config.js`).
 
 ## API

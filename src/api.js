@@ -20,7 +20,11 @@ async function request(path, { method = 'GET', body } = {}) {
     throw new Error('Cannot reach the server. Is the backend running?');
   }
   if (res.status === 204) return null;
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(() => null);
+  // A non-JSON error means the dev proxy could not reach the backend.
+  if (!data && !res.ok) {
+    throw new Error('Cannot reach the server. Start the backend: cd server && npm start');
+  }
   if (!res.ok) {
     const error = new Error(data.error || `Request failed (${res.status})`);
     error.fields = data.fields;

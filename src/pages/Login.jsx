@@ -70,6 +70,11 @@ export default function Login({ onLogin }) {
         <button type="submit" className="btn primary" disabled={submitting}>
           {submitting ? 'Please wait…' : isRegister ? 'Create account' : 'Login'}
         </button>
+        {!isRegister && (
+          <p className="demo-hint">
+            Demo account: <strong>demo@shop.com</strong> / <strong>demo123</strong>
+          </p>
+        )}
         <p className="switch">
           {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
           <button type="button" className="link" onClick={switchMode}>

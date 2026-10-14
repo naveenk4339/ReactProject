@@ -15,6 +15,18 @@ export function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(expected, actual);
 }
 
+// A ready-made account so the app can be tried without registering.
+// Set SEED_DEMO_USER=false to skip it.
+export const DEMO_USER = { email: 'demo@shop.com', password: 'demo123' };
+
+export function seedDemoUser() {
+  if (process.env.SEED_DEMO_USER === 'false') return;
+  db.prepare('INSERT OR IGNORE INTO users (email, password_hash) VALUES (?, ?)').run(
+    DEMO_USER.email,
+    hashPassword(DEMO_USER.password)
+  );
+}
+
 export function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
   db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
