@@ -1,0 +1,80 @@
+"""
+test_poc.py - tests for the parts that do NOT need an API key.
+
+The LLM's answers change from run to run, so we test the deterministic parts:
+retrieval (does the right chunk come back?) and the agent's tools.
+This is how you'd explain "evaluating a RAG system" in an interview:
+check retrieval with known question -> expected source pairs.
+
+Run:  python -m unittest test_poc.py -v
+"""
+
+import unittest
+
+from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
+from step3_agent import calculate_monthly_payment, get_car_price, search_policies
+
+
+class TestEmbeddings(unittest.TestCase):
+    def test_stop_words_are_ignored_and_plurals_merged(self):
+        vec = embed("The cars are returned")
+        self.assertNotIn("the", vec)
+        self.assertIn("car", vec)
+
+    def test_cosine_similarity_bounds(self):
+        a = embed("restocking fee")
+        self.assertAlmostEqual(cosine_similarity(a, a), 1.0)
+        self.assertEqual(cosine_similarity(a, embed("free delivery")), 0.0)
+
+
+class TestRetrieval(unittest.TestCase):
+    """A tiny retrieval eval: each question must find a chunk from the right file."""
+
+    CASES = [
+        ("What is the restocking fee for returns?", "return_policy.txt"),
+        ("How long does delivery take?", "delivery.txt"),
+        ("What interest rate do I get with a credit score of 750?", "financing.txt"),
+        ("Does the warranty cover tires?", "warranty.txt"),
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.store = VectorStore()
+
+    def test_top_result_comes_from_expected_document(self):
+        for question, expected_source in self.CASES:
+            with self.subTest(question=question):
+                results = self.store.search(question, top_k=3)
+                self.assertTrue(results, "no chunks retrieved")
+                self.assertEqual(results[0]["source"], expected_source)
+
+    def test_unrelated_question_retrieves_nothing(self):
+        self.assertEqual(self.store.search("quantum banana"), [])
+
+    def test_prompt_contains_context_and_question(self):
+        results = self.store.search("restocking fee")
+        prompt = build_rag_prompt("restocking fee?", results)
+        self.assertIn("2 percent", prompt)
+        self.assertIn("Question: restocking fee?", prompt)
+
+
+class TestAgentTools(unittest.TestCase):
+    def test_get_car_price_is_case_insensitive(self):
+        self.assertEqual(get_car_price("model 3")["price_usd"], 42000)
+
+    def test_get_car_price_unknown_model(self):
+        self.assertIn("error", get_car_price("Batmobile"))
+
+    def test_monthly_payment_matches_loan_formula(self):
+        # 42000 car - 10% down = 37800 loan, 6.5% for 60 months
+        self.assertEqual(calculate_monthly_payment(37800, 6.5, 60)["monthly_payment_usd"], 739.6)
+
+    def test_monthly_payment_zero_interest(self):
+        self.assertEqual(calculate_monthly_payment(12000, 0, 12)["monthly_payment_usd"], 1000.0)
+
+    def test_search_policies_tool_uses_rag(self):
+        self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
+
+
+if __name__ == "__main__":
+    unittest.main()
