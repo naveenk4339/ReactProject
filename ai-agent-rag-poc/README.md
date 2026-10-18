@@ -22,6 +22,12 @@ python step2_rag.py       "What is AutoMart's restocking fee for returns?"
 python step3_agent.py     # uses a built-in multi-step question
 ```
 
+Run the tests (no API key needed). They check that each sample question retrieves the right document and that the agent tools return correct values:
+
+```bash
+python -m unittest test_poc.py -v
+```
+
 **Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send, and step 3 runs each tool on its own. That's handy for a demo with no key.
 
 Illustrative agent output for step 3 (the tool results and math are real; the LLM wording will differ):
