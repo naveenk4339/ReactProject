@@ -28,4 +28,4 @@ The original combined code is still in this branch's git history.
 
 ## New: AI POC — LLM, RAG and Agent (Python)
 
-The [`ai-agent-rag-poc/`](ai-agent-rag-poc) folder is a small, interview-friendly demo that builds AI up in three steps: a plain LLM call, RAG written from scratch, and a tool-using agent. See [ai-agent-rag-poc/README.md](ai-agent-rag-poc/README.md).
+The [`ai-agent-rag-poc/`](ai-agent-rag-poc) folder is a small, interview-friendly demo that builds AI up in four steps: a plain LLM call, RAG written from scratch, a tool-using agent, and chat with memory. See [ai-agent-rag-poc/README.md](ai-agent-rag-poc/README.md).

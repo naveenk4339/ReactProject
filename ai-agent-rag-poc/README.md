@@ -1,12 +1,13 @@
 # AI POC: LLM → RAG → Agent (AutoMart car shop)
 
-A small proof of concept that builds AI up in **3 steps**, one file each. It has about 250 lines of Python and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
+A small proof of concept that builds AI up in **4 steps**, one file each. It has about 300 lines of Python and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
 
 | Step | File | Concept | One-line explanation |
 |------|------|---------|----------------------|
 | 1 | `step1_plain_llm.py` | **LLM** | Text in → text out. Smart, but knows nothing about *your* data. |
 | 2 | `step2_rag.py` | **RAG** | Search your documents first, put the relevant facts in the prompt, then ask the LLM. |
 | 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, a calculator) in a **loop** until it can answer. |
+| 4 | `step4_chat.py` | **Memory** | LLMs forget everything between calls. Chat "memory" is just sending the whole conversation again each turn. |
 
 Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search), `knowledge_base/*.txt` (the "private" company documents).
 
@@ -20,6 +21,7 @@ export ANTHROPIC_API_KEY=sk-ant-...        # from console.anthropic.com
 python step1_plain_llm.py "What is AutoMart's restocking fee for returns?"
 python step2_rag.py       "What is AutoMart's restocking fee for returns?"
 python step3_agent.py     # uses a built-in multi-step question
+python step4_chat.py      # chat with follow-ups, e.g. "what about 72 months?"
 ```
 
 Run the tests (no API key needed). They check that each sample question retrieves the right document and that the agent tools return correct values:
@@ -96,6 +98,7 @@ Key points to mention:
 | How do you choose chunk size? | Small chunks are precise but lose context. Large chunks keep context but add noise. Start at ~500 tokens with overlap and tune with evaluation. |
 | Keyword search vs vector search? | Keyword (BM25) matches exact words. Vector search matches meaning ("refund" ≈ "return"). Production systems often use **hybrid** search plus a **re-ranker**. |
 | How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. |
+| How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost. |
 | When NOT to use an agent? | When a fixed pipeline works. Agents are slower, cost more, and are less predictable. Use them for open-ended, multi-step tasks. |
 | What is the context window? | The maximum text (tokens) the LLM can read at once. RAG sends only the relevant pieces instead of every document. |
 | Frameworks? | LangChain, LlamaIndex, Spring AI (Java), Semantic Kernel. They wrap exactly these steps. This POC shows what's underneath. |
