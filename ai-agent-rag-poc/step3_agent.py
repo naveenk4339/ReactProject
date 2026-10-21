@@ -51,6 +51,13 @@ def get_car_price(model):
 
 def calculate_monthly_payment(loan_amount, annual_rate_percent, months):
     """Standard loan (EMI) formula. LLMs are bad at exact math - so we give them a calculator."""
+    # The LLM chooses these inputs, so check them: a clear error lets it correct itself.
+    if loan_amount <= 0:
+        return {"error": "loan_amount must be greater than 0"}
+    if annual_rate_percent < 0:
+        return {"error": "annual_rate_percent cannot be negative"}
+    if months <= 0 or months != int(months):
+        return {"error": "months must be a whole number greater than 0"}
     r = annual_rate_percent / 100 / 12
     payment = loan_amount * r * (1 + r) ** months / ((1 + r) ** months - 1) if r else loan_amount / months
     return {"monthly_payment_usd": round(payment, 2)}

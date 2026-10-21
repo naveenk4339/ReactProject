@@ -72,6 +72,12 @@ class TestAgentTools(unittest.TestCase):
     def test_monthly_payment_zero_interest(self):
         self.assertEqual(calculate_monthly_payment(12000, 0, 12)["monthly_payment_usd"], 1000.0)
 
+    def test_monthly_payment_rejects_bad_inputs(self):
+        # Inputs come from the LLM, so nonsense must return an error, not crash or give a negative payment
+        for args in [(37800, 6.5, 0), (37800, 6.5, -12), (37800, 6.5, 1.5), (0, 6.5, 60), (-5000, 6.5, 60), (37800, -1, 60)]:
+            with self.subTest(args=args):
+                self.assertIn("error", calculate_monthly_payment(*args))
+
     def test_search_policies_tool_uses_rag(self):
         self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
 
