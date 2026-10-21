@@ -63,10 +63,23 @@ def calculate_monthly_payment(loan_amount, annual_rate_percent, months):
     return {"monthly_payment_usd": round(payment, 2)}
 
 
+FREE_DELIVERY_MILES = 50  # same numbers as knowledge_base/delivery.txt
+COST_PER_EXTRA_MILE = 2
+
+
+def calculate_delivery_cost(distance_miles):
+    """Delivery fee: free within 50 miles of a store, then $2 for every extra mile."""
+    if distance_miles < 0:
+        return {"error": "distance_miles cannot be negative"}
+    extra_miles = max(0, distance_miles - FREE_DELIVERY_MILES)
+    return {"distance_miles": distance_miles, "delivery_cost_usd": round(extra_miles * COST_PER_EXTRA_MILE, 2)}
+
+
 TOOL_FUNCTIONS = {
     "search_policies": search_policies,
     "get_car_price": get_car_price,
     "calculate_monthly_payment": calculate_monthly_payment,
+    "calculate_delivery_cost": calculate_delivery_cost,
 }
 
 # ---------------------------------------------------------------
@@ -103,6 +116,15 @@ TOOLS = [
                 "months": {"type": "integer"},
             },
             "required": ["loan_amount", "annual_rate_percent", "months"],
+        },
+    },
+    {
+        "name": "calculate_delivery_cost",
+        "description": "Calculate the home delivery fee in USD for a distance in miles from the nearest AutoMart store.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"distance_miles": {"type": "number", "description": "Miles from the nearest store"}},
+            "required": ["distance_miles"],
         },
     },
 ]
@@ -163,6 +185,7 @@ if __name__ == "__main__":
         print("search_policies('interest rate credit score') ->", search_policies("interest rate credit score"))
         print("get_car_price('Model 3') ->", get_car_price("Model 3"))
         print("calculate_monthly_payment(37800, 6.5, 60) ->", calculate_monthly_payment(37800, 6.5, 60))
+        print("calculate_delivery_cost(80) ->", calculate_delivery_cost(80))
         print("\nWith a key, the LLM decides by itself which of these to call and in what order.")
         sys.exit()
 

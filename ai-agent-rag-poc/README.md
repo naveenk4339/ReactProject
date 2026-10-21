@@ -6,7 +6,7 @@ A small proof of concept that builds AI up in **3 steps**, one file each. It has
 |------|------|---------|----------------------|
 | 1 | `step1_plain_llm.py` | **LLM** | Text in → text out. Smart, but knows nothing about *your* data. |
 | 2 | `step2_rag.py` | **RAG** | Search your documents first, put the relevant facts in the prompt, then ask the LLM. |
-| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, a calculator) in a **loop** until it can answer. |
+| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, loan and delivery calculators) in a **loop** until it can answer. |
 
 Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search), `knowledge_base/*.txt` (the "private" company documents).
 
