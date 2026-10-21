@@ -12,7 +12,7 @@ Run:  python -m unittest test_poc.py -v
 import unittest
 
 from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
-from step3_agent import calculate_monthly_payment, get_car_price, search_policies
+from step3_agent import calculate_delivery_cost, calculate_monthly_payment, get_car_price, search_policies
 
 
 class TestEmbeddings(unittest.TestCase):
@@ -35,6 +35,7 @@ class TestRetrieval(unittest.TestCase):
         ("How long does delivery take?", "delivery.txt"),
         ("What interest rate do I get with a credit score of 750?", "financing.txt"),
         ("Does the warranty cover tires?", "warranty.txt"),
+        ("How much does delivery cost beyond 50 miles?", "delivery.txt"),
     ]
 
     @classmethod
@@ -77,6 +78,17 @@ class TestAgentTools(unittest.TestCase):
         for args in [(37800, 6.5, 0), (37800, 6.5, -12), (37800, 6.5, 1.5), (0, 6.5, 60), (-5000, 6.5, 60), (37800, -1, 60)]:
             with self.subTest(args=args):
                 self.assertIn("error", calculate_monthly_payment(*args))
+
+    def test_delivery_is_free_within_50_miles(self):
+        self.assertEqual(calculate_delivery_cost(0)["delivery_cost_usd"], 0)
+        self.assertEqual(calculate_delivery_cost(50)["delivery_cost_usd"], 0)
+
+    def test_delivery_charges_2_dollars_per_extra_mile(self):
+        self.assertEqual(calculate_delivery_cost(80)["delivery_cost_usd"], 60)
+        self.assertEqual(calculate_delivery_cost(50.5)["delivery_cost_usd"], 1.0)
+
+    def test_delivery_rejects_negative_distance(self):
+        self.assertIn("error", calculate_delivery_cost(-5))
 
     def test_search_policies_tool_uses_rag(self):
         self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
