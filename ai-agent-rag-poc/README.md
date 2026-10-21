@@ -1,6 +1,6 @@
 # AI POC: LLM → RAG → Agent (AutoMart car shop)
 
-A small proof of concept that builds AI up in **4 steps**, one file each. It has about 300 lines of Python and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
+A small proof of concept that builds AI up in **4 steps**, one file each. It has about 400 lines (mostly comments) of Python and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
 
 | Step | File | Concept | One-line explanation |
 |------|------|---------|----------------------|
