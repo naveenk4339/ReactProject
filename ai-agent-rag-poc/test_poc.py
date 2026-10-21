@@ -10,9 +10,12 @@ Run:  python -m unittest test_poc.py -v
 """
 
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
-from step3_agent import calculate_monthly_payment, get_car_price, search_policies
+import step3_agent
+from step3_agent import calculate_monthly_payment, get_car_price, run_agent, search_policies
 
 
 class TestEmbeddings(unittest.TestCase):
@@ -74,6 +77,27 @@ class TestAgentTools(unittest.TestCase):
 
     def test_search_policies_tool_uses_rag(self):
         self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
+
+
+class TestChatMemory(unittest.TestCase):
+    """Memory = resending the whole conversation. We swap in a fake LLM so no API key is needed."""
+
+    def test_chat_memory_keeps_history(self):
+        sent = []  # how many messages the "LLM" received on each call
+
+        def fake_llm(messages, system=None, tools=None):
+            sent.append(len(messages))
+            reply = SimpleNamespace(type="text", text="ok")
+            return SimpleNamespace(stop_reason="end_turn", content=[reply])
+
+        history = []
+        with mock.patch.object(step3_agent, "call_claude", fake_llm):
+            run_agent("Price of a Civic?", messages=history)
+            run_agent("What about 72 months?", messages=history)
+
+        self.assertEqual(sent, [1, 3])  # 2nd call also sees the 1st question and answer
+        self.assertEqual(history[0]["content"], "Price of a Civic?")
+        self.assertEqual(len(history), 4)  # user, assistant, user, assistant
 
 
 if __name__ == "__main__":

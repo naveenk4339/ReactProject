@@ -110,8 +110,11 @@ SYSTEM_PROMPT = (
 # ---------------------------------------------------------------
 
 
-def run_agent(question, max_steps=10):
-    messages = [{"role": "user", "content": question}]
+def run_agent(question, messages=None, max_steps=10):
+    """messages = the conversation so far. Pass the same list again to keep memory (see step4_chat.py)."""
+    if messages is None:
+        messages = []
+    messages.append({"role": "user", "content": question})
 
     for step in range(1, max_steps + 1):
         response = call_claude(messages, system=SYSTEM_PROMPT, tools=TOOLS)
