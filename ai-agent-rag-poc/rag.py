@@ -87,10 +87,15 @@ class VectorStore:
 # ---------- Step 3: GENERATE (prompt building) ----------
 
 def build_rag_prompt(question, retrieved):
-    """'Augment' the question with the retrieved facts."""
-    context = "\n".join(f"- ({r['source']}) {r['text']}" for r in retrieved)
+    """'Augment' the question with the retrieved facts.
+
+    Each fact is numbered so the LLM can cite it like [1]. Citations let the
+    customer (or a reviewer) check every claim against the source document.
+    """
+    context = "\n".join(f"[{i}] ({r['source']}) {r['text']}" for i, r in enumerate(retrieved, start=1))
     return (
         "Answer the customer's question using ONLY the context below.\n"
+        "After each fact you use, cite its number in square brackets, like [1].\n"
         "If the answer is not in the context, say \"I don't know\".\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}"

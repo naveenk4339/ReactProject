@@ -66,7 +66,7 @@ Demo: `step1_plain_llm.py`. The model can't know AutoMart's restocking fee.
 - **Embedding**: turn text into a vector of numbers so that similar meanings end up close together. This POC uses simple word counts (`rag.py → embed`) so you can see how it works. Real systems use an embedding model.
 - **Vector database**: stores the vectors and finds the nearest ones quickly (Pinecone, pgvector, Chroma, FAISS, Elasticsearch). Here it's a Python list (`VectorStore`).
 - **Similarity search**: cosine similarity, where 1.0 means "same direction" and 0 means "unrelated".
-- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations and lets you cite sources.
+- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`).
 
 Why RAG instead of fine-tuning? It's cheaper, data updates take effect right away (just re-index), you can show the source of each answer, and you can apply access control per document.
 

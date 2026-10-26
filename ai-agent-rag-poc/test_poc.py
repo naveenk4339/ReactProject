@@ -13,12 +13,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
-from step3_agent import calculate_delivery_cost, calculate_monthly_payment, get_car_price, search_policies
-
 import step3_agent
-from step3_agent import calculate_monthly_payment, get_car_price, run_agent, search_policies
-claude/react-login-shopping-cart-owbj5c
+from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
+from step3_agent import calculate_delivery_cost, calculate_monthly_payment, get_car_price, run_agent, search_policies
 
 
 class TestEmbeddings(unittest.TestCase):
@@ -63,6 +60,13 @@ class TestRetrieval(unittest.TestCase):
         prompt = build_rag_prompt("restocking fee?", results)
         self.assertIn("2 percent", prompt)
         self.assertIn("Question: restocking fee?", prompt)
+
+    def test_prompt_numbers_chunks_for_citations(self):
+        results = self.store.search("restocking fee", top_k=3)
+        prompt = build_rag_prompt("restocking fee?", results)
+        for i, r in enumerate(results, start=1):
+            self.assertIn(f"[{i}] ({r['source']}) {r['text']}", prompt)
+        self.assertIn("cite its number", prompt)
 
 
 class TestAgentTools(unittest.TestCase):
