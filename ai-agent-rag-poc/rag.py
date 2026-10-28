@@ -43,13 +43,21 @@ def load_chunks():
 def embed(text):
     """Turn text into a vector. Here: word -> how many times it appears.
 
-    "Cars can be returned within 7 days" -> {"cars": 1, "returned": 1, "within": 1, "7": 1, "days": 1}
+    "Cars can be returned within 7 days" -> {"car": 1, "returned": 1, "within": 1, "7": 1, "day": 1}
     A real embedding model returns ~1000 numbers that also capture meaning
     (so "refund" and "return" end up close together). Ours only matches exact words.
     """
     words = re.findall(r"[a-z0-9]+", text.lower())
-    words = [w.rstrip("s") if len(w) > 3 else w for w in words]  # tiny "stemming": cars -> car
-    return Counter(w for w in words if w not in STOP_WORDS)
+    words = [w for w in words if w not in STOP_WORDS]  # drop stop words BEFORE stemming ("does" -> "doe" would slip through)
+    return Counter(stem(w) for w in words)
+
+
+def stem(word):
+    """Tiny "stemming": cars -> car. Only drops ONE trailing 's', and not from words
+    ending in 'ss' ("glass", "less"), so different words don't collapse into junk."""
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
 
 
 def cosine_similarity(a, b):
