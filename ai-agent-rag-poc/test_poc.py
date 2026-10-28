@@ -31,6 +31,16 @@ class TestEmbeddings(unittest.TestCase):
         self.assertNotIn("the", vec)
         self.assertIn("car", vec)
 
+    def test_stop_words_removed_before_stemming(self):
+        # "does" and "this" used to become "doe" and "thi" and slip past the stop-word list
+        vec = embed("Does this cost extra?")
+        self.assertEqual(set(vec), {"cost", "extra"})
+
+    def test_stemming_keeps_words_ending_in_ss(self):
+        # rstrip("s") used to turn "glass" -> "gla" and "less" -> "le"
+        vec = embed("glass less miles")
+        self.assertEqual(set(vec), {"glass", "less", "mile"})
+
     def test_cosine_similarity_bounds(self):
         a = embed("restocking fee")
         self.assertAlmostEqual(cosine_similarity(a, a), 1.0)
