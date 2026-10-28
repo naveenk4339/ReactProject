@@ -15,7 +15,14 @@ from unittest import mock
 
 import step3_agent
 from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
-from step3_agent import calculate_delivery_cost, calculate_monthly_payment, get_car_price, run_agent, search_policies
+from step3_agent import (
+    calculate_delivery_cost,
+    calculate_monthly_payment,
+    estimate_delivery_dates,
+    get_car_price,
+    run_agent,
+    search_policies,
+)
 
 
 class TestEmbeddings(unittest.TestCase):
@@ -99,6 +106,21 @@ class TestAgentTools(unittest.TestCase):
 
     def test_delivery_rejects_negative_distance(self):
         self.assertIn("error", calculate_delivery_cost(-5))
+
+    def test_delivery_dates_skip_the_weekend(self):
+        # Paid Friday 2026-10-23: 3 business days -> Wed 10-28, 5 -> Fri 10-30
+        result = estimate_delivery_dates("2026-10-23")
+        self.assertEqual(result["earliest_delivery"], "2026-10-28 (Wednesday)")
+        self.assertEqual(result["latest_delivery"], "2026-10-30 (Friday)")
+
+    def test_delivery_dates_paid_on_a_saturday(self):
+        result = estimate_delivery_dates("2026-10-24")
+        self.assertEqual(result["earliest_delivery"], "2026-10-28 (Wednesday)")
+
+    def test_delivery_dates_reject_bad_input(self):
+        for bad in ["next friday", "2026-13-01", "", None]:
+            with self.subTest(bad=bad):
+                self.assertIn("error", estimate_delivery_dates(bad))
 
     def test_search_policies_tool_uses_rag(self):
         self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")

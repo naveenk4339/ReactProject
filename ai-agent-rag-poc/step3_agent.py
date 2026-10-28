@@ -25,6 +25,7 @@ Run:  python step3_agent.py "I want a Model 3 on a 60 month loan, credit score 7
 
 import json
 import sys
+from datetime import date, timedelta
 
 from llm import call_claude, has_api_key, text_of
 from rag import VectorStore
@@ -75,11 +76,40 @@ def calculate_delivery_cost(distance_miles):
     return {"distance_miles": distance_miles, "delivery_cost_usd": round(extra_miles * COST_PER_EXTRA_MILE, 2)}
 
 
+DELIVERY_BUSINESS_DAYS = (3, 5)  # "3 to 5 business days after payment" in delivery.txt
+
+
+def add_business_days(start, days):
+    """Count forward `days` weekdays (Mon-Fri) from `start`, skipping weekends."""
+    current = start
+    while days > 0:
+        current += timedelta(days=1)
+        if current.weekday() < 5:
+            days -= 1
+    return current
+
+
+def estimate_delivery_dates(payment_date):
+    """Earliest and latest delivery date for a payment made on payment_date (YYYY-MM-DD).
+    Date math across weekends is easy for code and easy for an LLM to get wrong."""
+    try:
+        paid = date.fromisoformat(payment_date)
+    except (TypeError, ValueError):
+        return {"error": "payment_date must be a date like 2026-10-23"}
+    earliest, latest = (add_business_days(paid, n) for n in DELIVERY_BUSINESS_DAYS)
+    return {
+        "payment_date": paid.isoformat(),
+        "earliest_delivery": f"{earliest.isoformat()} ({earliest:%A})",
+        "latest_delivery": f"{latest.isoformat()} ({latest:%A})",
+    }
+
+
 TOOL_FUNCTIONS = {
     "search_policies": search_policies,
     "get_car_price": get_car_price,
     "calculate_monthly_payment": calculate_monthly_payment,
     "calculate_delivery_cost": calculate_delivery_cost,
+    "estimate_delivery_dates": estimate_delivery_dates,
 }
 
 # ---------------------------------------------------------------
@@ -125,6 +155,16 @@ TOOLS = [
             "type": "object",
             "properties": {"distance_miles": {"type": "number", "description": "Miles from the nearest store"}},
             "required": ["distance_miles"],
+        },
+    },
+    {
+        "name": "estimate_delivery_dates",
+        "description": "Estimate the earliest and latest home delivery date (3 to 5 business days, weekends skipped) "
+                       "for a payment made on a given date.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"payment_date": {"type": "string", "description": "Payment date as YYYY-MM-DD"}},
+            "required": ["payment_date"],
         },
     },
 ]
@@ -189,6 +229,7 @@ if __name__ == "__main__":
         print("get_car_price('Model 3') ->", get_car_price("Model 3"))
         print("calculate_monthly_payment(37800, 6.5, 60) ->", calculate_monthly_payment(37800, 6.5, 60))
         print("calculate_delivery_cost(80) ->", calculate_delivery_cost(80))
+        print("estimate_delivery_dates('2026-10-23') ->", estimate_delivery_dates("2026-10-23"))
         print("\nWith a key, the LLM decides by itself which of these to call and in what order.")
         sys.exit()
 

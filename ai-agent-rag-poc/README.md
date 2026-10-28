@@ -6,7 +6,7 @@ A small proof of concept that builds AI up in **4 steps**, one file each. It has
 |------|------|---------|----------------------|
 | 1 | `step1_plain_llm.py` | **LLM** | Text in → text out. Smart, but knows nothing about *your* data. |
 | 2 | `step2_rag.py` | **RAG** | Search your documents first, put the relevant facts in the prompt, then ask the LLM. |
-| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, loan and delivery calculators) in a **loop** until i
+| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, loan and delivery calculators, a delivery date estimator) in a **loop** until i
 | 4 | `step4_chat.py` | **Memory** | LLMs forget everything between calls. Chat "memory" is just sending the whole conversation again each turn. |
 Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search), `knowledge_base/*.txt` (the "private" company documents).
 
