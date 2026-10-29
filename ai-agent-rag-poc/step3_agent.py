@@ -174,6 +174,13 @@ SYSTEM_PROMPT = (
     "Never guess prices, rates or policies - always check with a tool. Keep the final answer short."
 )
 
+
+def system_prompt(today=None):
+    """SYSTEM_PROMPT plus today's date. LLMs don't know the current date, so without this
+    "if I pay today, when does my car arrive?" would make it guess estimate_delivery_dates' input."""
+    today = today or date.today()
+    return f"{SYSTEM_PROMPT} Today's date is {today.isoformat()} ({today:%A})."
+
 # ---------------------------------------------------------------
 # 3. THE AGENT LOOP
 # ---------------------------------------------------------------
@@ -186,7 +193,7 @@ def run_agent(question, messages=None, max_steps=10):
     messages.append({"role": "user", "content": question})
 
     for step in range(1, max_steps + 1):
-        response = call_claude(messages, system=SYSTEM_PROMPT, tools=TOOLS)
+        response = call_claude(messages, system=system_prompt(), tools=TOOLS)
         messages.append({"role": "assistant", "content": response.content})
 
         # No tool requested -> the LLM has its final answer
