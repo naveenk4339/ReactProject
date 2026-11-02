@@ -10,6 +10,7 @@ Run:  python -m unittest test_poc.py -v
 """
 
 import unittest
+from datetime import date
 from types import SimpleNamespace
 from unittest import mock
 
@@ -155,6 +156,24 @@ class TestChatMemory(unittest.TestCase):
         self.assertEqual(sent, [1, 3])  # 2nd call also sees the 1st question and answer
         self.assertEqual(history[0]["content"], "Price of a Civic?")
         self.assertEqual(len(history), 4)  # user, assistant, user, assistant
+
+
+class TestSystemPrompt(unittest.TestCase):
+    def test_system_prompt_includes_todays_date(self):
+        prompt = step3_agent.system_prompt(date(2026, 10, 23))
+        self.assertIn(step3_agent.SYSTEM_PROMPT, prompt)
+        self.assertIn("Today's date is 2026-10-23 (Friday).", prompt)
+
+    def test_agent_sends_the_dated_prompt_to_the_llm(self):
+        seen = []
+
+        def fake_llm(messages, system=None, tools=None):
+            seen.append(system)
+            return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="ok")])
+
+        with mock.patch.object(step3_agent, "call_claude", fake_llm):
+            run_agent("When will my car arrive if I pay today?")
+        self.assertIn(f"Today's date is {date.today().isoformat()}", seen[0])
 
 
 if __name__ == "__main__":
