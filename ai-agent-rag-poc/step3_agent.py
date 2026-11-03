@@ -45,9 +45,20 @@ def search_policies(query):
 
 
 def get_car_price(model):
-    """Look up a car price in our 'database'."""
-    price = CAR_PRICES.get(model.lower())
-    return {"model": model, "price_usd": price} if price else {"error": f"Unknown model '{model}'"}
+    """Look up a car price in our 'database'.
+
+    The LLM often adds the brand ("Tesla Model 3", "Honda Civic"), so we also accept
+    an input that contains exactly one known model name. If nothing matches, the error
+    lists the valid names so the LLM can retry with one of them.
+    """
+    name = " ".join(model.lower().split())  # trim and collapse spaces
+    if name not in CAR_PRICES:
+        matches = [known for known in CAR_PRICES if f" {known} " in f" {name} "]
+        if len(matches) != 1:
+            available = ", ".join(sorted(CAR_PRICES))
+            return {"error": f"Unknown model '{model}'. Available models: {available}"}
+        name = matches[0]
+    return {"model": name, "price_usd": CAR_PRICES[name]}
 
 
 def calculate_monthly_payment(loan_amount, annual_rate_percent, months):
