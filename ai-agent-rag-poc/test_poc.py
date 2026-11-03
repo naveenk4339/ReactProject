@@ -94,6 +94,19 @@ class TestAgentTools(unittest.TestCase):
     def test_get_car_price_unknown_model(self):
         self.assertIn("error", get_car_price("Batmobile"))
 
+    def test_get_car_price_accepts_brand_and_extra_spaces(self):
+        self.assertEqual(get_car_price("Tesla Model 3")["price_usd"], 42000)
+        self.assertEqual(get_car_price("Honda Civic")["price_usd"], 26000)
+        self.assertEqual(get_car_price("  civic ")["price_usd"], 26000)
+
+    def test_get_car_price_unknown_model_lists_available_models(self):
+        error = get_car_price("Batmobile")["error"]
+        self.assertIn("camry, civic, model 3, mustang", error)
+
+    def test_get_car_price_does_not_match_inside_other_words(self):
+        # "civics" is not "civic"; only whole model names count
+        self.assertIn("error", get_car_price("civics"))
+
     def test_monthly_payment_matches_loan_formula(self):
         # 42000 car - 10% down = 37800 loan, 6.5% for 60 months
         self.assertEqual(calculate_monthly_payment(37800, 6.5, 60)["monthly_payment_usd"], 739.6)
