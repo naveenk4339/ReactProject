@@ -197,6 +197,22 @@ def system_prompt(today=None):
 # ---------------------------------------------------------------
 
 
+def run_tool(name, tool_input):
+    """Run one tool the LLM asked for. Returns (result, is_error).
+
+    is_error=True tells the LLM the call failed so it can fix its input and retry.
+    That covers three cases: an unknown tool name, a tool that raised an exception,
+    and a tool that returned {"error": ...} (bad input, unknown car model, ...).
+    """
+    if name not in TOOL_FUNCTIONS:
+        return f"Unknown tool '{name}'. Available tools: {', '.join(TOOL_FUNCTIONS)}", True
+    try:
+        result = TOOL_FUNCTIONS[name](**tool_input)
+    except Exception as e:
+        return f"Tool failed: {type(e).__name__}: {e}", True
+    return result, isinstance(result, dict) and "error" in result
+
+
 def run_agent(question, messages=None, max_steps=10):
     """messages = the conversation so far. Pass the same list again to keep memory (see step4_chat.py)."""
     if messages is None:
@@ -217,11 +233,7 @@ def run_agent(question, messages=None, max_steps=10):
             if block.type != "tool_use":
                 continue
             print(f"[step {step}] LLM calls {block.name}({json.dumps(block.input)})")
-            try:
-                result = TOOL_FUNCTIONS[block.name](**block.input)
-                is_error = False
-            except Exception as e:  # tell the LLM about the failure so it can recover
-                result, is_error = f"Tool failed: {e}", True
+            result, is_error = run_tool(block.name, block.input)
             print(f"         result -> {json.dumps(result)}")
             tool_results.append({
                 "type": "tool_result",

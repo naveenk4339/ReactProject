@@ -171,6 +171,46 @@ class TestChatMemory(unittest.TestCase):
         self.assertEqual(len(history), 4)  # user, assistant, user, assistant
 
 
+class TestRunTool(unittest.TestCase):
+    """How tool results are reported back to the LLM."""
+
+    def test_success_is_not_an_error(self):
+        result, is_error = step3_agent.run_tool("get_car_price", {"model": "Civic"})
+        self.assertEqual(result["price_usd"], 26000)
+        self.assertFalse(is_error)
+
+    def test_error_result_is_flagged(self):
+        # tools return {"error": ...} for bad input; the LLM must be told it failed
+        result, is_error = step3_agent.run_tool("calculate_delivery_cost", {"distance_miles": -5})
+        self.assertIn("error", result)
+        self.assertTrue(is_error)
+
+    def test_unknown_tool_lists_available_tools(self):
+        result, is_error = step3_agent.run_tool("book_test_drive", {})
+        self.assertTrue(is_error)
+        self.assertIn("Unknown tool 'book_test_drive'", result)
+        self.assertIn("get_car_price", result)
+
+    def test_exception_is_reported_with_its_type(self):
+        result, is_error = step3_agent.run_tool("get_car_price", {"wrong_arg": "Civic"})
+        self.assertTrue(is_error)
+        self.assertIn("Tool failed: TypeError", result)
+
+    def test_agent_loop_sends_is_error_to_the_llm(self):
+        replies = [
+            SimpleNamespace(stop_reason="tool_use", content=[SimpleNamespace(
+                type="tool_use", id="t1", name="get_car_price", input={"model": "Batmobile"})]),
+            SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="done")]),
+        ]
+        history = []
+        with mock.patch.object(step3_agent, "call_claude", lambda *a, **k: replies.pop(0)), \
+                mock.patch("builtins.print"):
+            run_agent("Price of a Batmobile?", messages=history)
+        tool_result = history[2]["content"][0]
+        self.assertTrue(tool_result["is_error"])
+        self.assertIn("Available models", tool_result["content"])
+
+
 class TestSystemPrompt(unittest.TestCase):
     def test_system_prompt_includes_todays_date(self):
         prompt = step3_agent.system_prompt(date(2026, 10, 23))
