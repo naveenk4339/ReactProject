@@ -211,6 +211,22 @@ class TestRunTool(unittest.TestCase):
         self.assertIn("Available models", tool_result["content"])
 
 
+class TestAgentLoopLimit(unittest.TestCase):
+    def test_agent_stops_after_max_steps(self):
+        # A fake LLM that never stops asking for tools must not loop forever
+        calls = []
+
+        def endless_llm(messages, system=None, tools=None):
+            calls.append(1)
+            block = SimpleNamespace(type="tool_use", id=f"t{len(calls)}", name="get_car_price", input={"model": "Civic"})
+            return SimpleNamespace(stop_reason="tool_use", content=[block])
+
+        with mock.patch.object(step3_agent, "call_claude", endless_llm), mock.patch("builtins.print"):
+            answer = run_agent("Loop forever?", max_steps=3)
+        self.assertEqual(answer, "Stopped: too many steps.")
+        self.assertEqual(len(calls), 3)
+
+
 class TestSystemPrompt(unittest.TestCase):
     def test_system_prompt_includes_todays_date(self):
         prompt = step3_agent.system_prompt(date(2026, 10, 23))

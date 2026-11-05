@@ -1,6 +1,6 @@
 # AI POC: LLM → RAG → Agent (AutoMart car shop)
 
-A small proof of concept that builds AI up in **4 steps**, one file each. It has about 400 lines (mostly comments) of Python and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
+A small proof of concept that builds AI up in **4 steps**, one file each. It has about 750 lines of Python (mostly comments and tests) and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
 
 | Step | File | Concept | One-line explanation |
 |------|------|---------|----------------------|
@@ -23,7 +23,13 @@ python step3_agent.py     # uses a built-in multi-step question
 python step4_chat.py      # chat with follow-ups, e.g. "what about 72 months?"
 ```
 
-Run the tests (no API key needed). They check that each sample question retrieves the right document and that the agent tools return correct values:
+Run the tests (no API key needed). They swap in a fake LLM where one is needed and check that:
+
+- each sample question retrieves the right document (a tiny retrieval eval),
+- the agent tools return correct values and reject bad input,
+- the agent loop flags tool errors, stops at its step limit, and sends today's date,
+- chat memory resends the conversation history.
+
 
 ```bash
 python -m unittest test_poc.py -v
@@ -87,6 +93,8 @@ Key points to mention:
 - **RAG is just one tool** the agent can use (`search_policies`). The agent decides *when* to search.
 - **Tools cover what LLMs are weak at**: exact math (calculator), live data (DB/API lookup), actions (send email, place an order).
 - **Safety**: a max-steps limit, errors are returned to the LLM so it can recover, and real actions (payments) should need human approval.
+- **Help the LLM recover**: tool errors are sent with `is_error: true` and say what *would* work (e.g. the list of known car models), so the LLM can fix its call in one step. See `run_tool()`.
+- **The LLM has no clock**: today's date goes in the system prompt (`system_prompt()`), otherwise "if I pay today, when does my car arrive?" makes it guess the date.
 - **Pattern names**: this is the "ReAct" pattern (Reason → Act → Observe → repeat). It's also known as "function calling" or "tool use".
 
 ### Common interview questions (short answers)
