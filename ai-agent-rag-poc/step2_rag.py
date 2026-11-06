@@ -25,6 +25,11 @@ print("RETRIEVED CHUNKS (most similar first):")
 for r in retrieved:
     print(f"  score={r['score']}  [{r['source']}]  {r['text']}")
 
+if not retrieved:
+    # Nothing relevant: answering anyway would only invite a made-up answer, so skip the LLM call.
+    print("  (nothing relevant found)\n\nANSWER: I don't know - none of our documents cover that.")
+    sys.exit()
+
 # 3a. Augment the prompt
 prompt = build_rag_prompt(question, retrieved)
 print("\nPROMPT SENT TO THE LLM:\n" + "-" * 60 + f"\n{prompt}\n" + "-" * 60)
