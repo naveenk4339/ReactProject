@@ -73,6 +73,17 @@ class TestRetrieval(unittest.TestCase):
     def test_unrelated_question_retrieves_nothing(self):
         self.assertEqual(self.store.search("quantum banana"), [])
 
+    def test_weak_matches_are_dropped(self):
+        # Shares only the word "car" with the policies (score ~0.17), so nothing should come back
+        self.assertEqual(self.store.search("What car do you recommend for a family?"), [])
+        # ...but lowering the threshold shows those weak matches were there
+        self.assertTrue(self.store.search("What car do you recommend for a family?", min_score=0.01))
+
+    def test_relevant_answers_survive_the_threshold(self):
+        for question, _ in self.CASES:
+            with self.subTest(question=question):
+                self.assertGreaterEqual(len(self.store.search(question)), 2)
+
     def test_prompt_contains_context_and_question(self):
         results = self.store.search("restocking fee")
         prompt = build_rag_prompt("restocking fee?", results)
