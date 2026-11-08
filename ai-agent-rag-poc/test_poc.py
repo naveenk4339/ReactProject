@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import step3_agent
+from eval_retrieval import evaluate
 from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
 from step3_agent import (
     calculate_delivery_cost,
@@ -96,6 +97,16 @@ class TestRetrieval(unittest.TestCase):
         for i, r in enumerate(results, start=1):
             self.assertIn(f"[{i}] ({r['source']}) {r['text']}", prompt)
         self.assertIn("cite its number", prompt)
+
+
+class TestRetrievalEval(unittest.TestCase):
+    """Guards the eval numbers: a change that makes retrieval worse fails here."""
+
+    def test_retrieval_eval_scores(self):
+        result = evaluate()
+        self.assertEqual(result["recall@3"], 1.0, result["misses"])
+        self.assertEqual(result["no_answer"], 1.0)
+        self.assertGreaterEqual(result["hit@1"], 0.9)
 
 
 class TestAgentTools(unittest.TestCase):
