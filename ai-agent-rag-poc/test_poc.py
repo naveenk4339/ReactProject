@@ -20,6 +20,7 @@ from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
+    check_stock,
     estimate_delivery_dates,
     get_car_price,
     run_agent,
@@ -124,6 +125,16 @@ class TestAgentTools(unittest.TestCase):
     def test_get_car_price_unknown_model_lists_available_models(self):
         error = get_car_price("Batmobile")["error"]
         self.assertIn("camry, civic, model 3, mustang", error)
+
+    def test_check_stock_reports_count_and_availability(self):
+        self.assertEqual(check_stock("Honda Civic"), {"model": "civic", "in_stock": 7, "available": True})
+        self.assertFalse(check_stock("camry")["available"])
+
+    def test_check_stock_unknown_model_lists_available_models(self):
+        self.assertIn("Available models", check_stock("Batmobile")["error"])
+
+    def test_every_priced_car_has_a_stock_entry(self):
+        self.assertEqual(set(step3_agent.CAR_PRICES), set(step3_agent.CAR_STOCK))
 
     def test_get_car_price_does_not_match_inside_other_words(self):
         # "civics" is not "civic"; only whole model names count
