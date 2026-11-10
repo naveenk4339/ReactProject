@@ -105,7 +105,7 @@ Key points to mention:
 | How do you choose chunk size? | Small chunks are precise but lose context. Large chunks keep context but add noise. Start at ~500 tokens with overlap and tune with evaluation. |
 | Keyword search vs vector search? | Keyword (BM25) matches exact words. Vector search matches meaning ("refund" ≈ "return"). Production systems often use **hybrid** search plus a **re-ranker**. |
 | How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. Try it: `python eval_retrieval.py` prints hit@1, recall@3 and how often out-of-scope questions correctly retrieve nothing. |
-| How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost. |
+| How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost (`trim_history()` keeps the last 10 questions, cutting only at a question so a tool call never loses its result). |
 | When NOT to use an agent? | When a fixed pipeline works. Agents are slower, cost more, and are less predictable. Use them for open-ended, multi-step tasks. |
 | What is the context window? | The maximum text (tokens) the LLM can read at once. RAG sends only the relevant pieces instead of every document. |
 | Frameworks? | LangChain, LlamaIndex, Spring AI (Java), Semantic Kernel. They wrap exactly these steps. This POC shows what's underneath. |

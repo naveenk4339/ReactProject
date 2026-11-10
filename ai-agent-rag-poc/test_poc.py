@@ -16,6 +16,7 @@ from unittest import mock
 
 import step3_agent
 from eval_retrieval import evaluate
+from step4_chat import trim_history
 from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
 from step3_agent import (
     calculate_delivery_cost,
@@ -202,6 +203,40 @@ class TestChatMemory(unittest.TestCase):
         self.assertEqual(sent, [1, 3])  # 2nd call also sees the 1st question and answer
         self.assertEqual(history[0]["content"], "Price of a Civic?")
         self.assertEqual(len(history), 4)  # user, assistant, user, assistant
+
+
+class TestTrimHistory(unittest.TestCase):
+    """Long chats are trimmed so each call doesn't resend (and pay for) the whole history."""
+
+    @staticmethod
+    def turn(n, with_tool=False):
+        msgs = [{"role": "user", "content": f"question {n}"}]
+        if with_tool:
+            msgs.append({"role": "assistant", "content": [{"type": "tool_use", "id": f"t{n}"}]})
+            msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": f"t{n}"}]})
+        msgs.append({"role": "assistant", "content": f"answer {n}"})
+        return msgs
+
+    def test_short_history_is_kept(self):
+        history = self.turn(1) + self.turn(2)
+        self.assertEqual(trim_history(history, max_turns=5), history)
+
+    def test_keeps_only_the_last_turns(self):
+        history = [m for n in range(1, 6) for m in self.turn(n)]
+        trimmed = trim_history(history, max_turns=2)
+        self.assertEqual(trimmed[0]["content"], "question 4")
+        self.assertEqual(len(trimmed), 4)
+
+    def test_never_splits_a_tool_call_from_its_result(self):
+        history = [m for n in range(1, 5) for m in self.turn(n, with_tool=True)]
+        trimmed = trim_history(history, max_turns=2)
+        # starts at a plain-text question, and every tool_result keeps its tool_use
+        self.assertEqual(trimmed[0], {"role": "user", "content": "question 3"})
+        call_ids = {b["id"] for m in trimmed if m["role"] == "assistant" and isinstance(m["content"], list)
+                    for b in m["content"]}
+        result_ids = {b["tool_use_id"] for m in trimmed if m["role"] == "user" and isinstance(m["content"], list)
+                      for b in m["content"]}
+        self.assertEqual(call_ids, result_ids)
 
 
 class TestRunTool(unittest.TestCase):

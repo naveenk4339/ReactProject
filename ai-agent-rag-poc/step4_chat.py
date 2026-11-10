@@ -19,6 +19,23 @@ Run:  python step4_chat.py      (type 'quit' to exit)
 from llm import has_api_key
 from step3_agent import run_agent
 
+MAX_TURNS = 10  # questions the assistant remembers; older ones are dropped to cap token cost
+
+
+def trim_history(messages, max_turns=MAX_TURNS):
+    """Keep only the last max_turns questions and everything after them.
+
+    A "turn" starts at a user message whose content is plain text (the question).
+    We only ever cut right before such a message, never between an assistant's
+    tool call and the user message carrying its tool result: the API rejects a
+    conversation whose tool result has lost its tool call.
+    """
+    starts = [i for i, m in enumerate(messages) if m["role"] == "user" and isinstance(m["content"], str)]
+    if len(starts) <= max_turns:
+        return messages
+    return messages[starts[-max_turns]:]
+
+
 if __name__ == "__main__":
     if not has_api_key():
         print("(No ANTHROPIC_API_KEY set - chat needs the LLM. Try:  python -m unittest test_poc.py -v")
@@ -31,6 +48,7 @@ if __name__ == "__main__":
         question = input("You: ").strip()
         if question.lower() in {"quit", "exit", ""}:
             break
+        history[:] = trim_history(history, MAX_TURNS - 1)  # leave room for this question
         answer = run_agent(question, messages=history)
         print(f"\nAssistant: {answer}")
         print(f"(memory: {len(history)} messages will be sent with your next question)\n")
