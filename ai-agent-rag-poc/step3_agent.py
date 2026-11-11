@@ -41,8 +41,16 @@ CAR_STOCK = {"model 3": 4, "civic": 7, "camry": 0, "mustang": 2}  # cars on the 
 
 
 def search_policies(query):
-    """RAG as a tool: look up AutoMart's policy documents."""
-    return store.search(query, top_k=3)
+    """RAG as a tool: look up AutoMart's policy documents.
+
+    When nothing is relevant enough, say so explicitly. A bare [] leaves the LLM
+    guessing what to do; a plain note tells it to admit it doesn't know.
+    """
+    results = store.search(query, top_k=3)
+    if not results:
+        return {"results": [], "note": "No AutoMart policy covers this. Try other words once; "
+                                         "if still nothing, tell the customer you don't know."}
+    return {"results": results}
 
 
 def get_car_price(model):

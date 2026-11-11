@@ -181,7 +181,14 @@ class TestAgentTools(unittest.TestCase):
                 self.assertIn("error", estimate_delivery_dates(bad))
 
     def test_search_policies_tool_uses_rag(self):
-        self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
+        result = search_policies("interest rate")
+        self.assertEqual(result["results"][0]["source"], "financing.txt")
+        self.assertNotIn("note", result)
+
+    def test_search_policies_says_when_nothing_matches(self):
+        result = search_policies("Can I pay with bitcoin?")
+        self.assertEqual(result["results"], [])
+        self.assertIn("don't know", result["note"])
 
 
 class TestChatMemory(unittest.TestCase):
