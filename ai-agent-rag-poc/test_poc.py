@@ -109,6 +109,7 @@ class TestRetrievalEval(unittest.TestCase):
         self.assertEqual(result["recall@3"], 1.0, result["misses"])
         self.assertEqual(result["no_answer"], 1.0)
         self.assertGreaterEqual(result["hit@1"], 0.9)
+        self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
 
 
 class TestAgentTools(unittest.TestCase):

@@ -8,6 +8,8 @@ where you KNOW which fact answers them, check whether search() finds that fact.
   recall@3  = the answering fact is somewhere in the top 3 (what the LLM gets to see)
   no-answer = for questions our documents don't cover, search() returns nothing
               (so the LLM can say "I don't know" instead of guessing)
+  coverage  = share of knowledge-base facts that have at least one eval question
+              (a fact with no question can stop being found without anyone noticing)
 
 Change the chunking, embedding or MIN_SCORE, re-run, and compare the numbers.
 No API key needed.
@@ -15,7 +17,7 @@ No API key needed.
 Run:  python eval_retrieval.py
 """
 
-from rag import VectorStore
+from rag import VectorStore, load_chunks
 
 # question -> a phrase from the chunk that answers it
 EVAL_SET = [
@@ -26,13 +28,17 @@ EVAL_SET = [
     ("How long does delivery take?", "3 to 5 business days"),
     ("How much does delivery cost beyond 50 miles?", "2 dollars per extra mile"),
     ("Is home delivery free?", "Free home delivery"),
+    ("Can I pick up the car from the store myself?", "pick up the car from the store"),
     # Known hit@1 miss: word counts can't compare numbers, so the "600 and 700" rule ranks
     # first for "750". The right chunk is still 2nd, so the LLM sees it (recall@3 holds).
     ("What interest rate do I get with a credit score of 750?", "6.5 percent"),
+    ("What rate do I get with a credit score of 650?", "9 percent"),
+    ("Do you offer car loans?", "car loans through partner banks"),
     ("What is the minimum down payment?", "minimum down payment of 10 percent"),
     ("Which loan terms are available?", "36, 48, 60 or 72 months"),
     ("Does the warranty cover tires?", "does not cover tires"),
     ("How long is the new car warranty?", "3 year or 36,000 mile"),
+    ("What warranty do used cars get?", "90 day powertrain"),
     ("How much is the extended warranty?", "1,200 dollars"),
 ]
 
@@ -56,18 +62,24 @@ def evaluate(store=None, top_k=3):
         if not any(found):
             misses.append(question)
     no_answer = sum(not store.search(q, top_k=top_k) for q in OUT_OF_SCOPE)
+    chunks = load_chunks()
+    uncovered = [c["text"] for c in chunks if not any(expected in c["text"] for _, expected in EVAL_SET)]
     return {
         "hit@1": hits_at_1 / len(EVAL_SET),
         f"recall@{top_k}": hits_at_k / len(EVAL_SET),
         "no_answer": no_answer / len(OUT_OF_SCOPE),
+        "coverage": 1 - len(uncovered) / len(chunks),
         "misses": misses,
+        "uncovered": uncovered,
     }
 
 
 if __name__ == "__main__":
     result = evaluate()
     print(f"Retrieval eval on {len(EVAL_SET)} questions + {len(OUT_OF_SCOPE)} out-of-scope questions\n")
-    for name in ("hit@1", "recall@3", "no_answer"):
+    for name in ("hit@1", "recall@3", "no_answer", "coverage"):
         print(f"  {name:<10} {result[name]:.0%}")
     for question in result["misses"]:
         print(f"  MISSED: {question}")
+    for fact in result["uncovered"]:
+        print(f"  NO EVAL QUESTION FOR: {fact}")
