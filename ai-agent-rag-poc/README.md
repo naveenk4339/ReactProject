@@ -1,14 +1,14 @@
 # AI POC: LLM → RAG → Agent (AutoMart car shop)
 
-A small proof of concept that builds AI up in **4 steps**, one file each. It has about 750 lines of Python (mostly comments and tests) and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
+A small proof of concept that builds AI up in **4 steps**, one file each. It has about 1,000 lines of Python (mostly comments and tests) and only needs the `anthropic` package. RAG is written from scratch so you can see each step and explain it in an interview.
 
 | Step | File | Concept | One-line explanation |
 |------|------|---------|----------------------|
 | 1 | `step1_plain_llm.py` | **LLM** | Text in → text out. Smart, but knows nothing about *your* data. |
 | 2 | `step2_rag.py` | **RAG** | Search your documents first, put the relevant facts in the prompt, then ask the LLM. |
-| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, a DB lookup, loan and delivery calculators, a delivery date estimator) in a **loop** until i
-| 4 | `step4_chat.py` | **Memory** | LLMs forget everything between calls. Chat "memory" is just sending the whole conversation again each turn. |
-Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search), `knowledge_base/*.txt` (the "private" company documents).
+| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, price and stock lookups, loan and delivery calculators, a delivery date estimator) in a **loop** until i
+| 4 | `step4_chat.py` | **Memory** | LLMs forget everything between calls. Chat "memory" is just sending the whole conversation again each turn (trimmed to the last 10 questions to cap cost). |
+Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search, relevance threshold), `knowledge_base/*.txt` (the "private" company documents), `eval_retrieval.py` (measures search quality), `test_poc.py` (tests, no API key needed).
 
 ## Run it
 
@@ -25,17 +25,23 @@ python step4_chat.py      # chat with follow-ups, e.g. "what about 72 months?"
 
 Run the tests (no API key needed). They swap in a fake LLM where one is needed and check that:
 
-- each sample question retrieves the right document (a tiny retrieval eval),
-- the agent tools return correct values and reject bad input,
+- each sample question retrieves the right document, weak matches are dropped, and the eval scores don't get worse,
+- the agent tools (price, stock, loan, delivery cost and dates, policy search) return correct values and reject bad input,
 - the agent loop flags tool errors, stops at its step limit, and sends today's date,
-- chat memory resends the conversation history.
+- chat memory resends the conversation history and trims long chats without splitting a tool call from its result.
 
 
 ```bash
 python -m unittest test_poc.py -v
 ```
 
-**Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send, and step 3 runs each tool on its own. That's handy for a demo with no key.
+Measure retrieval quality (no API key needed):
+
+```bash
+python eval_retrieval.py      # hit@1, recall@3, and how often out-of-scope questions retrieve nothing
+```
+
+**Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send (or answers "I don't know" when nothing relevant is found), and step 3 runs each tool on its own. That's handy for a demo with no key.
 
 Illustrative agent output for step 3 (the tool results and math are real; the LLM wording will differ):
 
@@ -72,6 +78,7 @@ Demo: `step1_plain_llm.py`. The model can't know AutoMart's restocking fee.
 - **Embedding**: turn text into a vector of numbers so that similar meanings end up close together. This POC uses simple word counts (`rag.py → embed`) so you can see how it works. Real systems use an embedding model.
 - **Vector database**: stores the vectors and finds the nearest ones quickly (Pinecone, pgvector, Chroma, FAISS, Elasticsearch). Here it's a Python list (`VectorStore`).
 - **Similarity search**: cosine similarity, where 1.0 means "same direction" and 0 means "unrelated".
+- **Relevance threshold**: chunks scoring below `MIN_SCORE` (0.2) are dropped, so a question no document covers retrieves nothing instead of loosely related noise. Tune it with `eval_retrieval.py`.
 - **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`).
 
 Why RAG instead of fine-tuning? It's cheaper, data updates take effect right away (just re-index), you can show the source of each answer, and you can apply access control per document.
@@ -104,8 +111,8 @@ Key points to mention:
 | How do you reduce hallucinations? | RAG with a "use only the context" prompt, citations, low-temperature/structured outputs, tools for facts and math, and evaluation sets. |
 | How do you choose chunk size? | Small chunks are precise but lose context. Large chunks keep context but add noise. Start at ~500 tokens with overlap and tune with evaluation. |
 | Keyword search vs vector search? | Keyword (BM25) matches exact words. Vector search matches meaning ("refund" ≈ "return"). Production systems often use **hybrid** search plus a **re-ranker**. |
-| How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. |
-| How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost. |
+| How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. Try it: `python eval_retrieval.py` prints hit@1, recall@3 and how often out-of-scope questions correctly retrieve nothing. |
+| How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost (`trim_history()` keeps the last 10 questions, cutting only at a question so a tool call never loses its result). |
 | When NOT to use an agent? | When a fixed pipeline works. Agents are slower, cost more, and are less predictable. Use them for open-ended, multi-step tasks. |
 | What is the context window? | The maximum text (tokens) the LLM can read at once. RAG sends only the relevant pieces instead of every document. |
 | Frameworks? | LangChain, LlamaIndex, Spring AI (Java), Semantic Kernel. They wrap exactly these steps. This POC shows what's underneath. |
