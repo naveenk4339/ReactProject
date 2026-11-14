@@ -14,6 +14,7 @@ from datetime import date
 from types import SimpleNamespace
 from unittest import mock
 
+import llm
 import step3_agent
 from eval_retrieval import evaluate
 from step4_chat import trim_history
@@ -301,6 +302,49 @@ class TestAgentLoopLimit(unittest.TestCase):
             answer = run_agent("Loop forever?", max_steps=3)
         self.assertEqual(answer, "Stopped: too many steps.")
         self.assertEqual(len(calls), 3)
+
+
+class TestLLMWrapper(unittest.TestCase):
+    """llm.py is the only code that talks to Claude. A mocked client checks it without a key or network."""
+
+    def call_with_fake_client(self, stop_reason="end_turn", **kwargs):
+        fake_response = SimpleNamespace(stop_reason=stop_reason, content=[])
+        with mock.patch.object(llm.anthropic, "Anthropic") as client_class:
+            create = client_class.return_value.beta.messages.create
+            create.return_value = fake_response
+            result = llm.call_claude([{"role": "user", "content": "Hi"}], **kwargs)
+        return result, create.call_args.kwargs
+
+    def test_request_has_model_and_messages(self):
+        _, sent = self.call_with_fake_client()
+        self.assertEqual(sent["model"], llm.MODEL)
+        self.assertEqual(sent["messages"], [{"role": "user", "content": "Hi"}])
+
+    def test_system_and_tools_sent_only_when_given(self):
+        _, sent = self.call_with_fake_client()
+        self.assertNotIn("system", sent)
+        self.assertNotIn("tools", sent)
+        _, sent = self.call_with_fake_client(system="Be brief", tools=[{"name": "t"}])
+        self.assertEqual(sent["system"], "Be brief")
+        self.assertEqual(sent["tools"], [{"name": "t"}])
+
+    def test_refusal_raises_instead_of_returning_an_empty_answer(self):
+        with self.assertRaises(RuntimeError):
+            self.call_with_fake_client(stop_reason="refusal")
+
+    def test_text_of_ignores_tool_call_blocks(self):
+        response = SimpleNamespace(content=[
+            SimpleNamespace(type="text", text="Price: "),
+            SimpleNamespace(type="tool_use", name="get_car_price"),
+            SimpleNamespace(type="text", text="$26,000"),
+        ])
+        self.assertEqual(llm.text_of(response), "Price: $26,000")
+
+    def test_has_api_key_reads_the_environment(self):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            self.assertTrue(llm.has_api_key())
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(llm.has_api_key())
 
 
 class TestSystemPrompt(unittest.TestCase):
