@@ -29,8 +29,8 @@ EVAL_SET = [
     ("How much does delivery cost beyond 50 miles?", "2 dollars per extra mile"),
     ("Is home delivery free?", "Free home delivery"),
     ("Can I pick up the car from the store myself?", "pick up the car from the store"),
-    # Known hit@1 miss: word counts can't compare numbers, so the "600 and 700" rule ranks
-    # first for "750". The right chunk is still 2nd, so the LLM sees it (recall@3 holds).
+    # Word counts alone rank the "600 and 700" rule first for "750"; the numeric-range
+    # bonus in rag.py fixes that (hit@1 was 94% without it).
     ("What interest rate do I get with a credit score of 750?", "6.5 percent"),
     ("What rate do I get with a credit score of 650?", "9 percent"),
     ("Do you offer car loans?", "car loans through partner banks"),

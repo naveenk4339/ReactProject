@@ -9,6 +9,7 @@ check retrieval with known question -> expected source pairs.
 Run:  python -m unittest test_poc.py -v
 """
 
+import math
 import unittest
 from datetime import date
 from types import SimpleNamespace
@@ -18,7 +19,7 @@ import llm
 import step3_agent
 from eval_retrieval import evaluate
 from step4_chat import trim_history
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
+from rag import VectorStore, build_rag_prompt, cosine_similarity, embed, numeric_ranges
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
@@ -109,8 +110,21 @@ class TestRetrievalEval(unittest.TestCase):
         result = evaluate()
         self.assertEqual(result["recall@3"], 1.0, result["misses"])
         self.assertEqual(result["no_answer"], 1.0)
-        self.assertGreaterEqual(result["hit@1"], 0.9)
+        self.assertEqual(result["hit@1"], 1.0, "a question's answer is no longer ranked first")
         self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
+
+
+class TestNumericRanges(unittest.TestCase):
+    def test_parses_ranges(self):
+        self.assertEqual(numeric_ranges("a credit score between 600 and 700"), [(600, 700)])
+        self.assertEqual(numeric_ranges("a credit score above 700"), [(701, math.inf)])
+        self.assertEqual(numeric_ranges("driven less than 300 miles"), [(-math.inf, 299)])
+        self.assertEqual(numeric_ranges("free within 50 miles"), [])  # deliberately not a range
+
+    def test_number_in_range_ranks_the_right_rule_first(self):
+        store = VectorStore()
+        self.assertIn("6.5 percent", store.search("What rate with a credit score of 750?")[0]["text"])
+        self.assertIn("9 percent", store.search("What rate with a credit score of 650?")[0]["text"])
 
 
 class TestAgentTools(unittest.TestCase):

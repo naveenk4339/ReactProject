@@ -78,6 +78,7 @@ Demo: `step1_plain_llm.py`. The model can't know AutoMart's restocking fee.
 - **Embedding**: turn text into a vector of numbers so that similar meanings end up close together. This POC uses simple word counts (`rag.py → embed`) so you can see how it works. Real systems use an embedding model.
 - **Vector database**: stores the vectors and finds the nearest ones quickly (Pinecone, pgvector, Chroma, FAISS, Elasticsearch). Here it's a Python list (`VectorStore`).
 - **Similarity search**: cosine similarity, where 1.0 means "same direction" and 0 means "unrelated".
+- **Numbers need help**: word similarity can't tell that 750 is "above 700", so `search()` adds a small bonus to chunks whose stated range contains a number from the question (`NUMERIC_BONUS`). Real systems do the same with metadata filters or hybrid keyword+vector scoring.
 - **Relevance threshold**: chunks scoring below `MIN_SCORE` (0.2) are dropped, so a question no document covers retrieves nothing instead of loosely related noise. Tune it with `eval_retrieval.py`.
 - **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`).
 
