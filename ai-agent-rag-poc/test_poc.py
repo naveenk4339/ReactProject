@@ -9,6 +9,7 @@ check retrieval with known question -> expected source pairs.
 Run:  python -m unittest test_poc.py -v
 """
 
+import inspect
 import math
 import unittest
 from datetime import date
@@ -260,6 +261,38 @@ class TestTrimHistory(unittest.TestCase):
         result_ids = {b["tool_use_id"] for m in trimmed if m["role"] == "user" and isinstance(m["content"], list)
                       for b in m["content"]}
         self.assertEqual(call_ids, result_ids)
+
+
+def schema_mismatches(tool, func):
+    """Differences between a tool's JSON schema (what the LLM sends) and its Python signature."""
+    params = inspect.signature(func).parameters
+    required = {name for name, p in params.items() if p.default is p.empty}
+    schema = tool["input_schema"]
+    problems = []
+    if set(schema["properties"]) != set(params):
+        problems.append(f"schema properties {sorted(schema['properties'])} != parameters {sorted(params)}")
+    if set(schema.get("required", [])) != required:
+        problems.append(f"schema required {sorted(schema.get('required', []))} != required parameters {sorted(required)}")
+    return problems
+
+
+class TestToolSchemas(unittest.TestCase):
+    """Each tool is written twice: a Python function and the JSON schema the LLM reads.
+    If they drift (a renamed parameter), every LLM call to that tool fails at runtime."""
+
+    def test_every_tool_has_a_function_and_vice_versa(self):
+        self.assertEqual({t["name"] for t in step3_agent.TOOLS}, set(step3_agent.TOOL_FUNCTIONS))
+
+    def test_schemas_match_function_signatures(self):
+        for tool in step3_agent.TOOLS:
+            with self.subTest(tool=tool["name"]):
+                self.assertEqual(schema_mismatches(tool, step3_agent.TOOL_FUNCTIONS[tool["name"]]), [])
+
+    def test_mismatch_is_detected(self):
+        def get_car_price(car_model):  # parameter renamed, schema still says "model"
+            pass
+        tool = next(t for t in step3_agent.TOOLS if t["name"] == "get_car_price")
+        self.assertTrue(schema_mismatches(tool, get_car_price))
 
 
 class TestRunTool(unittest.TestCase):

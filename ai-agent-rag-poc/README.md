@@ -38,7 +38,7 @@ python -m unittest test_poc.py -v
 Measure retrieval quality (no API key needed):
 
 ```bash
-python eval_retrieval.py      # hit@1, recall@3, and how often out-of-scope questions retrieve nothing
+python eval_retrieval.py      # hit@1, recall@3, out-of-scope questions retrieving nothing, coverage
 ```
 
 **Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send (or answers "I don't know" when nothing relevant is found), and step 3 runs each tool on its own. That's handy for a demo with no key.
@@ -112,7 +112,7 @@ Key points to mention:
 | How do you reduce hallucinations? | RAG with a "use only the context" prompt, citations, low-temperature/structured outputs, tools for facts and math, and evaluation sets. |
 | How do you choose chunk size? | Small chunks are precise but lose context. Large chunks keep context but add noise. Start at ~500 tokens with overlap and tune with evaluation. |
 | Keyword search vs vector search? | Keyword (BM25) matches exact words. Vector search matches meaning ("refund" ≈ "return"). Production systems often use **hybrid** search plus a **re-ranker**. |
-| How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. Try it: `python eval_retrieval.py` prints hit@1, recall@3 and how often out-of-scope questions correctly retrieve nothing. |
+| How do you evaluate a RAG system? | Retrieval: did the right chunk appear in the top-k (recall@k)? Generation: is the answer faithful to the context and correct? Use a labelled question set. Try it: `python eval_retrieval.py` prints hit@1, recall@3, how often out-of-scope questions correctly retrieve nothing, and coverage (every fact has an eval question). |
 | How does a chatbot "remember"? | It doesn't. The LLM is stateless, so the app resends the conversation history on every call (`history` in `step4_chat.py`). Long chats get trimmed or summarized to control token cost (`trim_history()` keeps the last 10 questions, cutting only at a question so a tool call never loses its result). |
 | When NOT to use an agent? | When a fixed pipeline works. Agents are slower, cost more, and are less predictable. Use them for open-ended, multi-step tasks. |
 | What is the context window? | The maximum text (tokens) the LLM can read at once. RAG sends only the relevant pieces instead of every document. |
