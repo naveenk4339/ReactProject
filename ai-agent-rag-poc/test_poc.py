@@ -9,16 +9,22 @@ check retrieval with known question -> expected source pairs.
 Run:  python -m unittest test_poc.py -v
 """
 
+import inspect
+import math
 import unittest
 from datetime import date
 from types import SimpleNamespace
 from unittest import mock
 
+import llm
 import step3_agent
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed
+from eval_retrieval import evaluate
+from step4_chat import trim_history
+from rag import VectorStore, build_rag_prompt, cosine_similarity, embed, numeric_ranges
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
+    check_stock,
     estimate_delivery_dates,
     get_car_price,
     run_agent,
@@ -73,6 +79,17 @@ class TestRetrieval(unittest.TestCase):
     def test_unrelated_question_retrieves_nothing(self):
         self.assertEqual(self.store.search("quantum banana"), [])
 
+    def test_weak_matches_are_dropped(self):
+        # Shares only the word "car" with the policies (score ~0.17), so nothing should come back
+        self.assertEqual(self.store.search("What car do you recommend for a family?"), [])
+        # ...but lowering the threshold shows those weak matches were there
+        self.assertTrue(self.store.search("What car do you recommend for a family?", min_score=0.01))
+
+    def test_relevant_answers_survive_the_threshold(self):
+        for question, _ in self.CASES:
+            with self.subTest(question=question):
+                self.assertGreaterEqual(len(self.store.search(question)), 2)
+
     def test_prompt_contains_context_and_question(self):
         results = self.store.search("restocking fee")
         prompt = build_rag_prompt("restocking fee?", results)
@@ -85,6 +102,30 @@ class TestRetrieval(unittest.TestCase):
         for i, r in enumerate(results, start=1):
             self.assertIn(f"[{i}] ({r['source']}) {r['text']}", prompt)
         self.assertIn("cite its number", prompt)
+
+
+class TestRetrievalEval(unittest.TestCase):
+    """Guards the eval numbers: a change that makes retrieval worse fails here."""
+
+    def test_retrieval_eval_scores(self):
+        result = evaluate()
+        self.assertEqual(result["recall@3"], 1.0, result["misses"])
+        self.assertEqual(result["no_answer"], 1.0)
+        self.assertEqual(result["hit@1"], 1.0, "a question's answer is no longer ranked first")
+        self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
+
+
+class TestNumericRanges(unittest.TestCase):
+    def test_parses_ranges(self):
+        self.assertEqual(numeric_ranges("a credit score between 600 and 700"), [(600, 700)])
+        self.assertEqual(numeric_ranges("a credit score above 700"), [(701, math.inf)])
+        self.assertEqual(numeric_ranges("driven less than 300 miles"), [(-math.inf, 299)])
+        self.assertEqual(numeric_ranges("free within 50 miles"), [])  # deliberately not a range
+
+    def test_number_in_range_ranks_the_right_rule_first(self):
+        store = VectorStore()
+        self.assertIn("6.5 percent", store.search("What rate with a credit score of 750?")[0]["text"])
+        self.assertIn("9 percent", store.search("What rate with a credit score of 650?")[0]["text"])
 
 
 class TestAgentTools(unittest.TestCase):
@@ -102,6 +143,16 @@ class TestAgentTools(unittest.TestCase):
     def test_get_car_price_unknown_model_lists_available_models(self):
         error = get_car_price("Batmobile")["error"]
         self.assertIn("camry, civic, model 3, mustang", error)
+
+    def test_check_stock_reports_count_and_availability(self):
+        self.assertEqual(check_stock("Honda Civic"), {"model": "civic", "in_stock": 7, "available": True})
+        self.assertFalse(check_stock("camry")["available"])
+
+    def test_check_stock_unknown_model_lists_available_models(self):
+        self.assertIn("Available models", check_stock("Batmobile")["error"])
+
+    def test_every_priced_car_has_a_stock_entry(self):
+        self.assertEqual(set(step3_agent.CAR_PRICES), set(step3_agent.CAR_STOCK))
 
     def test_get_car_price_does_not_match_inside_other_words(self):
         # "civics" is not "civic"; only whole model names count
@@ -147,7 +198,14 @@ class TestAgentTools(unittest.TestCase):
                 self.assertIn("error", estimate_delivery_dates(bad))
 
     def test_search_policies_tool_uses_rag(self):
-        self.assertEqual(search_policies("interest rate")[0]["source"], "financing.txt")
+        result = search_policies("interest rate")
+        self.assertEqual(result["results"][0]["source"], "financing.txt")
+        self.assertNotIn("note", result)
+
+    def test_search_policies_says_when_nothing_matches(self):
+        result = search_policies("Can I pay with bitcoin?")
+        self.assertEqual(result["results"], [])
+        self.assertIn("don't know", result["note"])
 
 
 class TestChatMemory(unittest.TestCase):
@@ -169,6 +227,72 @@ class TestChatMemory(unittest.TestCase):
         self.assertEqual(sent, [1, 3])  # 2nd call also sees the 1st question and answer
         self.assertEqual(history[0]["content"], "Price of a Civic?")
         self.assertEqual(len(history), 4)  # user, assistant, user, assistant
+
+
+class TestTrimHistory(unittest.TestCase):
+    """Long chats are trimmed so each call doesn't resend (and pay for) the whole history."""
+
+    @staticmethod
+    def turn(n, with_tool=False):
+        msgs = [{"role": "user", "content": f"question {n}"}]
+        if with_tool:
+            msgs.append({"role": "assistant", "content": [{"type": "tool_use", "id": f"t{n}"}]})
+            msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": f"t{n}"}]})
+        msgs.append({"role": "assistant", "content": f"answer {n}"})
+        return msgs
+
+    def test_short_history_is_kept(self):
+        history = self.turn(1) + self.turn(2)
+        self.assertEqual(trim_history(history, max_turns=5), history)
+
+    def test_keeps_only_the_last_turns(self):
+        history = [m for n in range(1, 6) for m in self.turn(n)]
+        trimmed = trim_history(history, max_turns=2)
+        self.assertEqual(trimmed[0]["content"], "question 4")
+        self.assertEqual(len(trimmed), 4)
+
+    def test_never_splits_a_tool_call_from_its_result(self):
+        history = [m for n in range(1, 5) for m in self.turn(n, with_tool=True)]
+        trimmed = trim_history(history, max_turns=2)
+        # starts at a plain-text question, and every tool_result keeps its tool_use
+        self.assertEqual(trimmed[0], {"role": "user", "content": "question 3"})
+        call_ids = {b["id"] for m in trimmed if m["role"] == "assistant" and isinstance(m["content"], list)
+                    for b in m["content"]}
+        result_ids = {b["tool_use_id"] for m in trimmed if m["role"] == "user" and isinstance(m["content"], list)
+                      for b in m["content"]}
+        self.assertEqual(call_ids, result_ids)
+
+
+def schema_mismatches(tool, func):
+    """Differences between a tool's JSON schema (what the LLM sends) and its Python signature."""
+    params = inspect.signature(func).parameters
+    required = {name for name, p in params.items() if p.default is p.empty}
+    schema = tool["input_schema"]
+    problems = []
+    if set(schema["properties"]) != set(params):
+        problems.append(f"schema properties {sorted(schema['properties'])} != parameters {sorted(params)}")
+    if set(schema.get("required", [])) != required:
+        problems.append(f"schema required {sorted(schema.get('required', []))} != required parameters {sorted(required)}")
+    return problems
+
+
+class TestToolSchemas(unittest.TestCase):
+    """Each tool is written twice: a Python function and the JSON schema the LLM reads.
+    If they drift (a renamed parameter), every LLM call to that tool fails at runtime."""
+
+    def test_every_tool_has_a_function_and_vice_versa(self):
+        self.assertEqual({t["name"] for t in step3_agent.TOOLS}, set(step3_agent.TOOL_FUNCTIONS))
+
+    def test_schemas_match_function_signatures(self):
+        for tool in step3_agent.TOOLS:
+            with self.subTest(tool=tool["name"]):
+                self.assertEqual(schema_mismatches(tool, step3_agent.TOOL_FUNCTIONS[tool["name"]]), [])
+
+    def test_mismatch_is_detected(self):
+        def get_car_price(car_model):  # parameter renamed, schema still says "model"
+            pass
+        tool = next(t for t in step3_agent.TOOLS if t["name"] == "get_car_price")
+        self.assertTrue(schema_mismatches(tool, get_car_price))
 
 
 class TestRunTool(unittest.TestCase):
@@ -225,6 +349,49 @@ class TestAgentLoopLimit(unittest.TestCase):
             answer = run_agent("Loop forever?", max_steps=3)
         self.assertEqual(answer, "Stopped: too many steps.")
         self.assertEqual(len(calls), 3)
+
+
+class TestLLMWrapper(unittest.TestCase):
+    """llm.py is the only code that talks to Claude. A mocked client checks it without a key or network."""
+
+    def call_with_fake_client(self, stop_reason="end_turn", **kwargs):
+        fake_response = SimpleNamespace(stop_reason=stop_reason, content=[])
+        with mock.patch.object(llm.anthropic, "Anthropic") as client_class:
+            create = client_class.return_value.beta.messages.create
+            create.return_value = fake_response
+            result = llm.call_claude([{"role": "user", "content": "Hi"}], **kwargs)
+        return result, create.call_args.kwargs
+
+    def test_request_has_model_and_messages(self):
+        _, sent = self.call_with_fake_client()
+        self.assertEqual(sent["model"], llm.MODEL)
+        self.assertEqual(sent["messages"], [{"role": "user", "content": "Hi"}])
+
+    def test_system_and_tools_sent_only_when_given(self):
+        _, sent = self.call_with_fake_client()
+        self.assertNotIn("system", sent)
+        self.assertNotIn("tools", sent)
+        _, sent = self.call_with_fake_client(system="Be brief", tools=[{"name": "t"}])
+        self.assertEqual(sent["system"], "Be brief")
+        self.assertEqual(sent["tools"], [{"name": "t"}])
+
+    def test_refusal_raises_instead_of_returning_an_empty_answer(self):
+        with self.assertRaises(RuntimeError):
+            self.call_with_fake_client(stop_reason="refusal")
+
+    def test_text_of_ignores_tool_call_blocks(self):
+        response = SimpleNamespace(content=[
+            SimpleNamespace(type="text", text="Price: "),
+            SimpleNamespace(type="tool_use", name="get_car_price"),
+            SimpleNamespace(type="text", text="$26,000"),
+        ])
+        self.assertEqual(llm.text_of(response), "Price: $26,000")
+
+    def test_has_api_key_reads_the_environment(self):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            self.assertTrue(llm.has_api_key())
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertFalse(llm.has_api_key())
 
 
 class TestSystemPrompt(unittest.TestCase):

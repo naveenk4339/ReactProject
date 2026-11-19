@@ -70,6 +70,35 @@ def cosine_similarity(a, b):
     return dot / (norm_a * norm_b)
 
 
+# Relevance cut-off for search(). Useful matches in our sample questions score 0.22 and up;
+# unrelated questions score ~0.17 by sharing a common word. Tune it with an eval set.
+MIN_SCORE = 0.2
+
+# Word counts can't compare numbers: for "credit score of 750" the "between 600 and 700"
+# rule shares more words than the "above 700" rule. So, as a small hybrid step on top of
+# similarity, a chunk whose stated range contains a number from the question gets a bonus.
+# ("within 50 miles" is left out on purpose: "beyond 50 miles" would wrongly match it.)
+NUMERIC_BONUS = 0.1
+RANGE_PATTERN = re.compile(r"between (\d+) and (\d+)|(?:above|over|more than) (\d+)|(?:below|under|less than) (\d+)")
+
+
+def numeric_ranges(text):
+    """Ranges stated in text: "between 600 and 700" -> (600, 700), "above 700" -> (701, inf)."""
+    ranges = []
+    for low, high, above, below in RANGE_PATTERN.findall(text.lower()):
+        if low:
+            ranges.append((int(low), int(high)))
+        elif above:
+            ranges.append((int(above) + 1, math.inf))
+        else:
+            ranges.append((-math.inf, int(below) - 1))
+    return ranges
+
+
+def numbers_in(text):
+    return [int(n) for n in re.findall(r"\b\d+\b", text)]
+
+
 class VectorStore:
     """A tiny in-memory 'vector database'."""
 
@@ -80,15 +109,27 @@ class VectorStore:
 
     # ---------- Step 2: RETRIEVE ----------
 
-    def search(self, question, top_k=3):
-        """Return the top_k chunks most similar to the question."""
+    def search(self, question, top_k=3, min_score=MIN_SCORE):
+        """Return up to top_k chunks most similar to the question.
+
+        Chunks scoring below min_score are dropped: a weak match (e.g. sharing only
+        the word "car") is noise, and handing it to the LLM as "context" invites a
+        made-up answer. Better to retrieve nothing and let the LLM say "I don't know".
+        """
         q_vec = embed(question)
-        scored = [(cosine_similarity(q_vec, c["vector"]), c) for c in self.chunks]
+        q_numbers = numbers_in(question)
+        scored = []
+        for c in self.chunks:
+            score = cosine_similarity(q_vec, c["vector"])
+            in_range = any(low <= n <= high for n in q_numbers for low, high in numeric_ranges(c["text"]))
+            if score > 0 and in_range:  # only boosts chunks that already match on words
+                score += NUMERIC_BONUS
+            scored.append((score, c))
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [
             {"score": round(score, 2), "source": c["source"], "text": c["text"]}
             for score, c in scored[:top_k]
-            if score > 0
+            if score >= min_score
         ]
 
 

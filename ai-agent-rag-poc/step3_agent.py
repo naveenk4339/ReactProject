@@ -37,11 +37,20 @@ store = VectorStore()
 # ---------------------------------------------------------------
 
 CAR_PRICES = {"model 3": 42000, "civic": 26000, "camry": 29000, "mustang": 38000}  # pretend database
+CAR_STOCK = {"model 3": 4, "civic": 7, "camry": 0, "mustang": 2}  # cars on the lot right now
 
 
 def search_policies(query):
-    """RAG as a tool: look up AutoMart's policy documents."""
-    return store.search(query, top_k=3)
+    """RAG as a tool: look up AutoMart's policy documents.
+
+    When nothing is relevant enough, say so explicitly. A bare [] leaves the LLM
+    guessing what to do; a plain note tells it to admit it doesn't know.
+    """
+    results = store.search(query, top_k=3)
+    if not results:
+        return {"results": [], "note": "No AutoMart policy covers this. Try other words once; "
+                                         "if still nothing, tell the customer you don't know."}
+    return {"results": results}
 
 
 def get_car_price(model):
@@ -51,14 +60,33 @@ def get_car_price(model):
     an input that contains exactly one known model name. If nothing matches, the error
     lists the valid names so the LLM can retry with one of them.
     """
-    name = " ".join(model.lower().split())  # trim and collapse spaces
-    if name not in CAR_PRICES:
-        matches = [known for known in CAR_PRICES if f" {known} " in f" {name} "]
-        if len(matches) != 1:
-            available = ", ".join(sorted(CAR_PRICES))
-            return {"error": f"Unknown model '{model}'. Available models: {available}"}
-        name = matches[0]
+    name = match_model(model)
+    if name is None:
+        return unknown_model_error(model)
     return {"model": name, "price_usd": CAR_PRICES[name]}
+
+
+def check_stock(model):
+    """How many of a model are on the lot. Stock changes daily, so the LLM must never guess it."""
+    name = match_model(model)
+    if name is None:
+        return unknown_model_error(model)
+    count = CAR_STOCK[name]
+    return {"model": name, "in_stock": count, "available": count > 0}
+
+
+def match_model(model):
+    """Find the known model name in what the LLM sent: trims spaces and accepts a brand
+    prefix ("Honda Civic"). Returns None unless exactly one known model matches."""
+    name = " ".join(model.lower().split())  # trim and collapse spaces
+    if name in CAR_PRICES:
+        return name
+    matches = [known for known in CAR_PRICES if f" {known} " in f" {name} "]
+    return matches[0] if len(matches) == 1 else None
+
+
+def unknown_model_error(model):
+    return {"error": f"Unknown model '{model}'. Available models: {', '.join(sorted(CAR_PRICES))}"}
 
 
 def calculate_monthly_payment(loan_amount, annual_rate_percent, months):
@@ -120,6 +148,7 @@ TOOL_FUNCTIONS = {
     "get_car_price": get_car_price,
     "calculate_monthly_payment": calculate_monthly_payment,
     "calculate_delivery_cost": calculate_delivery_cost,
+    "check_stock": check_stock,
     "estimate_delivery_dates": estimate_delivery_dates,
 }
 
@@ -140,6 +169,15 @@ TOOLS = [
     {
         "name": "get_car_price",
         "description": "Get the price in USD of a car model sold by AutoMart.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"model": {"type": "string", "description": "e.g. 'Model 3', 'Civic'"}},
+            "required": ["model"],
+        },
+    },
+    {
+        "name": "check_stock",
+        "description": "Check how many cars of a model AutoMart has in stock right now.",
         "input_schema": {
             "type": "object",
             "properties": {"model": {"type": "string", "description": "e.g. 'Model 3', 'Civic'"}},
@@ -257,6 +295,7 @@ if __name__ == "__main__":
         print("(No ANTHROPIC_API_KEY set - the LLM 'brain' is unavailable, but here are the tools working on their own:)\n")
         print("search_policies('interest rate credit score') ->", search_policies("interest rate credit score"))
         print("get_car_price('Model 3') ->", get_car_price("Model 3"))
+        print("check_stock('Toyota Camry') ->", check_stock("Toyota Camry"))
         print("calculate_monthly_payment(37800, 6.5, 60) ->", calculate_monthly_payment(37800, 6.5, 60))
         print("calculate_delivery_cost(80) ->", calculate_delivery_cost(80))
         print("estimate_delivery_dates('2026-10-23') ->", estimate_delivery_dates("2026-10-23"))
