@@ -8,6 +8,8 @@ where you KNOW which fact answers them, check whether search() finds that fact.
   recall@3  = the answering fact is somewhere in the top 3 (what the LLM gets to see)
   no-answer = for questions our documents don't cover, search() returns nothing
               (so the LLM can say "I don't know" instead of guessing)
+  synonym recall@3 = questions phrased with a DIFFERENT word than the documents
+              ("refund" vs "return") still get the answering fact in the top 3
   coverage  = share of knowledge-base facts that have at least one eval question
               (a fact with no question can stop being found without anyone noticing)
 
@@ -42,6 +44,14 @@ EVAL_SET = [
     ("How much is the extended warranty?", "1,200 dollars"),
 ]
 
+# Same facts, asked with words the documents don't use (see SYNONYMS in rag.py)
+SYNONYM_SET = [
+    ("Is there financing available?", "car loans through partner banks"),
+    ("Can I get a refund?", "return a car within 7 days"),
+    ("Do you ship cars to my house?", "Free home delivery"),
+    ("What does the guarantee cover?", "does not cover tires"),
+]
+
 # Questions none of our documents answer: search() should return nothing
 OUT_OF_SCOPE = [
     "Can I pay with bitcoin?",
@@ -62,12 +72,14 @@ def evaluate(store=None, top_k=3):
         if not any(found):
             misses.append(question)
     no_answer = sum(not store.search(q, top_k=top_k) for q in OUT_OF_SCOPE)
+    synonym_hits = sum(any(expected in r["text"] for r in store.search(q, top_k=top_k)) for q, expected in SYNONYM_SET)
     chunks = load_chunks()
     uncovered = [c["text"] for c in chunks if not any(expected in c["text"] for _, expected in EVAL_SET)]
     return {
         "hit@1": hits_at_1 / len(EVAL_SET),
         f"recall@{top_k}": hits_at_k / len(EVAL_SET),
         "no_answer": no_answer / len(OUT_OF_SCOPE),
+        f"synonym_recall@{top_k}": synonym_hits / len(SYNONYM_SET),
         "coverage": 1 - len(uncovered) / len(chunks),
         "misses": misses,
         "uncovered": uncovered,
@@ -76,9 +88,9 @@ def evaluate(store=None, top_k=3):
 
 if __name__ == "__main__":
     result = evaluate()
-    print(f"Retrieval eval on {len(EVAL_SET)} questions + {len(OUT_OF_SCOPE)} out-of-scope questions\n")
-    for name in ("hit@1", "recall@3", "no_answer", "coverage"):
-        print(f"  {name:<10} {result[name]:.0%}")
+    print(f"Retrieval eval on {len(EVAL_SET)} questions + {len(SYNONYM_SET)} synonym questions + {len(OUT_OF_SCOPE)} out-of-scope questions\n")
+    for name in ("hit@1", "recall@3", "no_answer", "synonym_recall@3", "coverage"):
+        print(f"  {name:<16} {result[name]:.0%}")
     for question in result["misses"]:
         print(f"  MISSED: {question}")
     for fact in result["uncovered"]:

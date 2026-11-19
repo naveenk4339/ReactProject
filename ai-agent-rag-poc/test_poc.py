@@ -43,6 +43,10 @@ class TestEmbeddings(unittest.TestCase):
         vec = embed("Does this cost extra?")
         self.assertEqual(set(vec), {"cost", "extra"})
 
+    def test_synonyms_map_onto_document_words(self):
+        self.assertEqual(embed("refund"), embed("return"))
+        self.assertEqual(embed("financing"), embed("loan"))
+
     def test_stemming_keeps_words_ending_in_ss(self):
         # rstrip("s") used to turn "glass" -> "gla" and "less" -> "le"
         vec = embed("glass less miles")
@@ -111,6 +115,7 @@ class TestRetrievalEval(unittest.TestCase):
         result = evaluate()
         self.assertEqual(result["recall@3"], 1.0, result["misses"])
         self.assertEqual(result["no_answer"], 1.0)
+        self.assertEqual(result["synonym_recall@3"], 1.0)
         self.assertEqual(result["hit@1"], 1.0, "a question's answer is no longer ranked first")
         self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
 
