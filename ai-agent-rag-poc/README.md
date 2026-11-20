@@ -81,7 +81,7 @@ Demo: `step1_plain_llm.py`. The model can't know AutoMart's restocking fee.
 - **Synonyms need help too**: customers say "refund", the policy says "return". Word counts miss that, so `rag.py → SYNONYMS` maps a few words onto the documents' words (a tiny form of query expansion). A real embedding model learns this from data.
 - **Numbers need help**: word similarity can't tell that 750 is "above 700", so `search()` adds a small bonus to chunks whose stated range contains a number from the question (`NUMERIC_BONUS`). Real systems do the same with metadata filters or hybrid keyword+vector scoring.
 - **Relevance threshold**: chunks scoring below `MIN_SCORE` (0.2) are dropped, so a question no document covers retrieves nothing instead of loosely related noise. Tune it with `eval_retrieval.py`.
-- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`).
+- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`). Asking isn't enough, so step 2 also checks the answer (`check_citations`): it warns if the LLM cites a fact it wasn't given, like `[4]` when only 3 were sent, or cites nothing.
 
 Why RAG instead of fine-tuning? It's cheaper, data updates take effect right away (just re-index), you can show the source of each answer, and you can apply access control per document.
 

@@ -20,7 +20,7 @@ import llm
 import step3_agent
 from eval_retrieval import evaluate
 from step4_chat import trim_history
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed, numeric_ranges
+from rag import VectorStore, build_rag_prompt, check_citations, cosine_similarity, embed, numeric_ranges
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
@@ -106,6 +106,27 @@ class TestRetrieval(unittest.TestCase):
         for i, r in enumerate(results, start=1):
             self.assertIn(f"[{i}] ({r['source']}) {r['text']}", prompt)
         self.assertIn("cite its number", prompt)
+
+
+class TestCheckCitations(unittest.TestCase):
+    RETRIEVED = [{"source": "a.txt", "text": "x"}, {"source": "b.txt", "text": "y"}]
+
+    def test_valid_citations(self):
+        check = check_citations("The fee is 2% [1], and returns take 7 days [2].", self.RETRIEVED)
+        self.assertEqual(check, {"cited": [1, 2], "invalid": [], "missing": False, "ok": True})
+
+    def test_citing_a_source_that_was_not_given(self):
+        check = check_citations("The fee is 2% [1][3].", self.RETRIEVED)
+        self.assertEqual(check["invalid"], [3])
+        self.assertFalse(check["ok"])
+
+    def test_no_citations_is_flagged(self):
+        check = check_citations("The fee is 2 percent.", self.RETRIEVED)
+        self.assertTrue(check["missing"])
+        self.assertFalse(check["ok"])
+
+    def test_i_dont_know_needs_no_citation(self):
+        self.assertTrue(check_citations("I don't know.", self.RETRIEVED)["ok"])
 
 
 class TestRetrievalEval(unittest.TestCase):

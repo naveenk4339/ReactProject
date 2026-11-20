@@ -12,7 +12,7 @@ Run:  python step2_rag.py "What is the restocking fee for returns?"
 import sys
 
 from llm import call_claude, has_api_key, text_of
-from rag import VectorStore, build_rag_prompt
+from rag import VectorStore, build_rag_prompt, check_citations
 
 question = sys.argv[1] if len(sys.argv) > 1 else "What is AutoMart's restocking fee for returns?"
 store = VectorStore()
@@ -42,3 +42,12 @@ if not has_api_key():
 answer = text_of(call_claude([{"role": "user", "content": prompt}]))
 print("\nLLM ANSWER (grounded in our documents):\n")
 print(answer)
+
+# 4. Guardrail: did the LLM actually cite the facts we gave it?
+check = check_citations(answer, retrieved)
+if check["invalid"]:
+    print(f"\nWARNING: cites sources that don't exist: {check['invalid']}")
+elif check["missing"]:
+    print("\nWARNING: no citations, so this answer can't be checked against our documents.")
+else:
+    print(f"\n(citations OK: {check['cited']})")
