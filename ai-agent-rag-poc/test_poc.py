@@ -20,7 +20,7 @@ import llm
 import step3_agent
 from eval_retrieval import evaluate
 from step4_chat import trim_history
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed, numeric_ranges
+from rag import VectorStore, build_rag_prompt, check_citations, cosine_similarity, embed, numeric_ranges
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
@@ -42,6 +42,10 @@ class TestEmbeddings(unittest.TestCase):
         # "does" and "this" used to become "doe" and "thi" and slip past the stop-word list
         vec = embed("Does this cost extra?")
         self.assertEqual(set(vec), {"cost", "extra"})
+
+    def test_synonyms_map_onto_document_words(self):
+        self.assertEqual(embed("refund"), embed("return"))
+        self.assertEqual(embed("financing"), embed("loan"))
 
     def test_stemming_keeps_words_ending_in_ss(self):
         # rstrip("s") used to turn "glass" -> "gla" and "less" -> "le"
@@ -104,6 +108,27 @@ class TestRetrieval(unittest.TestCase):
         self.assertIn("cite its number", prompt)
 
 
+class TestCheckCitations(unittest.TestCase):
+    RETRIEVED = [{"source": "a.txt", "text": "x"}, {"source": "b.txt", "text": "y"}]
+
+    def test_valid_citations(self):
+        check = check_citations("The fee is 2% [1], and returns take 7 days [2].", self.RETRIEVED)
+        self.assertEqual(check, {"cited": [1, 2], "invalid": [], "missing": False, "ok": True})
+
+    def test_citing_a_source_that_was_not_given(self):
+        check = check_citations("The fee is 2% [1][3].", self.RETRIEVED)
+        self.assertEqual(check["invalid"], [3])
+        self.assertFalse(check["ok"])
+
+    def test_no_citations_is_flagged(self):
+        check = check_citations("The fee is 2 percent.", self.RETRIEVED)
+        self.assertTrue(check["missing"])
+        self.assertFalse(check["ok"])
+
+    def test_i_dont_know_needs_no_citation(self):
+        self.assertTrue(check_citations("I don't know.", self.RETRIEVED)["ok"])
+
+
 class TestRetrievalEval(unittest.TestCase):
     """Guards the eval numbers: a change that makes retrieval worse fails here."""
 
@@ -111,6 +136,7 @@ class TestRetrievalEval(unittest.TestCase):
         result = evaluate()
         self.assertEqual(result["recall@3"], 1.0, result["misses"])
         self.assertEqual(result["no_answer"], 1.0)
+        self.assertEqual(result["synonym_recall@3"], 1.0)
         self.assertEqual(result["hit@1"], 1.0, "a question's answer is no longer ranked first")
         self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
 

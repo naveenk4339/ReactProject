@@ -45,11 +45,23 @@ def embed(text):
 
     "Cars can be returned within 7 days" -> {"car": 1, "returned": 1, "within": 1, "7": 1, "day": 1}
     A real embedding model returns ~1000 numbers that also capture meaning
-    (so "refund" and "return" end up close together). Ours only matches exact words.
+    (so "refund" and "return" end up close together). Ours only matches exact words,
+    so SYNONYMS maps a few common customer words onto the words our documents use.
     """
     words = re.findall(r"[a-z0-9]+", text.lower())
     words = [w for w in words if w not in STOP_WORDS]  # drop stop words BEFORE stemming ("does" -> "doe" would slip through)
-    return Counter(stem(w) for w in words)
+    return Counter(stem(SYNONYMS.get(w, w)) for w in words)
+
+
+# Customers say "refund", our policy says "return". Mapping a few synonyms onto the
+# documents' words is a tiny version of "query expansion". Applied to documents and
+# questions alike, so both sides end up with the same word.
+SYNONYMS = {
+    "financing": "loan", "finance": "loan",
+    "refund": "return",
+    "guarantee": "warranty",
+    "ship": "delivery", "shipping": "delivery",
+}
 
 
 def stem(word):
@@ -149,3 +161,22 @@ def build_rag_prompt(question, retrieved):
         f"Context:\n{context}\n\n"
         f"Question: {question}"
     )
+
+
+def check_citations(answer, retrieved):
+    """Check the [n] citations in an LLM answer against the chunks we gave it.
+
+    The prompt ASKS for citations, but nothing forces the LLM to obey. Catch two problems:
+      - invalid: cites [4] when only 3 chunks were given (a made-up source)
+      - missing: no citation at all, so no claim can be checked
+    An "I don't know" answer needs no citation.
+    """
+    cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", answer)})
+    invalid = [n for n in cited if not 1 <= n <= len(retrieved)]
+    said_dont_know = "don't know" in answer.lower() or "do not know" in answer.lower()
+    return {
+        "cited": cited,
+        "invalid": invalid,
+        "missing": not cited and not said_dont_know,
+        "ok": not invalid and (bool(cited) or said_dont_know),
+    }
