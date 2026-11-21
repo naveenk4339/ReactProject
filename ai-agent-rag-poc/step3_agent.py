@@ -143,6 +143,31 @@ def estimate_delivery_dates(payment_date):
     }
 
 
+RETURN_WINDOW_DAYS = 7  # same rules as knowledge_base/return_policy.txt
+RETURN_MAX_MILES = 300
+RESTOCKING_FEE_RATE = 0.02
+
+
+def check_return_eligibility(days_since_delivery, miles_driven, bought_on_clearance, car_price=None):
+    """Apply the return policy's rules: within 7 days, under 300 miles, not a clearance car.
+    Combining several rules is easy for code and easy for an LLM to get subtly wrong."""
+    if days_since_delivery < 0 or miles_driven < 0:
+        return {"error": "days_since_delivery and miles_driven cannot be negative"}
+    if car_price is not None and car_price <= 0:
+        return {"error": "car_price must be greater than 0"}
+    reasons = []
+    if days_since_delivery > RETURN_WINDOW_DAYS:
+        reasons.append(f"more than {RETURN_WINDOW_DAYS} days since delivery")
+    if miles_driven >= RETURN_MAX_MILES:
+        reasons.append(f"driven {RETURN_MAX_MILES} miles or more")
+    if bought_on_clearance:
+        reasons.append("clearance cars cannot be returned")
+    result = {"eligible": not reasons, "reasons": reasons}
+    if not reasons and car_price is not None:
+        result["restocking_fee_usd"] = round(car_price * RESTOCKING_FEE_RATE, 2)
+    return result
+
+
 TOOL_FUNCTIONS = {
     "search_policies": search_policies,
     "get_car_price": get_car_price,
@@ -150,6 +175,7 @@ TOOL_FUNCTIONS = {
     "calculate_delivery_cost": calculate_delivery_cost,
     "check_stock": check_stock,
     "estimate_delivery_dates": estimate_delivery_dates,
+    "check_return_eligibility": check_return_eligibility,
 }
 
 # ---------------------------------------------------------------
@@ -216,6 +242,21 @@ TOOLS = [
             "required": ["payment_date"],
         },
     },
+    {
+        "name": "check_return_eligibility",
+        "description": "Check whether a customer can return a car under AutoMart's return policy, "
+                       "and the restocking fee if they can (give car_price to get the fee).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days_since_delivery": {"type": "integer"},
+                "miles_driven": {"type": "number"},
+                "bought_on_clearance": {"type": "boolean"},
+                "car_price": {"type": "number", "description": "Optional, in USD, to compute the restocking fee"},
+            },
+            "required": ["days_since_delivery", "miles_driven", "bought_on_clearance"],
+        },
+    }
 ]
 
 SYSTEM_PROMPT = (
@@ -299,6 +340,7 @@ if __name__ == "__main__":
         print("calculate_monthly_payment(37800, 6.5, 60) ->", calculate_monthly_payment(37800, 6.5, 60))
         print("calculate_delivery_cost(80) ->", calculate_delivery_cost(80))
         print("estimate_delivery_dates('2026-10-23') ->", estimate_delivery_dates("2026-10-23"))
+        print("check_return_eligibility(5, 120, False, 42000) ->", check_return_eligibility(5, 120, False, 42000))
         print("\nWith a key, the LLM decides by itself which of these to call and in what order.")
         sys.exit()
 

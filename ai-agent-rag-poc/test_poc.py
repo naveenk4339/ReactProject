@@ -24,6 +24,7 @@ from rag import VectorStore, build_rag_prompt, check_citations, cosine_similarit
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
+    check_return_eligibility,
     check_stock,
     estimate_delivery_dates,
     get_car_price,
@@ -207,6 +208,25 @@ class TestAgentTools(unittest.TestCase):
 
     def test_delivery_rejects_negative_distance(self):
         self.assertIn("error", calculate_delivery_cost(-5))
+
+    def test_return_eligible_with_restocking_fee(self):
+        self.assertEqual(check_return_eligibility(5, 120, False, 42000),
+                         {"eligible": True, "reasons": [], "restocking_fee_usd": 840.0})
+
+    def test_return_boundaries(self):
+        self.assertTrue(check_return_eligibility(7, 299, False)["eligible"])   # day 7 and 299 miles still OK
+        self.assertFalse(check_return_eligibility(8, 0, False)["eligible"])
+        self.assertFalse(check_return_eligibility(1, 300, False)["eligible"])  # "less than 300 miles"
+
+    def test_return_lists_every_reason(self):
+        result = check_return_eligibility(10, 500, True, 30000)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(len(result["reasons"]), 3)
+        self.assertNotIn("restocking_fee_usd", result)
+
+    def test_return_rejects_bad_input(self):
+        self.assertIn("error", check_return_eligibility(-1, 10, False))
+        self.assertIn("error", check_return_eligibility(1, 10, False, car_price=0))
 
     def test_delivery_dates_skip_the_weekend(self):
         # Paid Friday 2026-10-23: 3 business days -> Wed 10-28, 5 -> Fri 10-30
