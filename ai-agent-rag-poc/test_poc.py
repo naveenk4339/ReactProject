@@ -128,6 +128,11 @@ class TestCheckCitations(unittest.TestCase):
 
     def test_i_dont_know_needs_no_citation(self):
         self.assertTrue(check_citations("I don't know.", self.RETRIEVED)["ok"])
+        self.assertTrue(check_citations("I don\u2019t know.", self.RETRIEVED)["ok"])  # curly apostrophe
+
+    def test_grouped_citations_are_read(self):
+        self.assertEqual(check_citations("Fee is 2% and 7 days [1, 2].", self.RETRIEVED)["cited"], [1, 2])
+        self.assertEqual(check_citations("Fee is 2% [1,3].", self.RETRIEVED)["invalid"], [3])
 
 
 class TestRetrievalEval(unittest.TestCase):

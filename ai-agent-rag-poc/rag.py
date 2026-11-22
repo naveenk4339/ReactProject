@@ -171,9 +171,12 @@ def check_citations(answer, retrieved):
       - missing: no citation at all, so no claim can be checked
     An "I don't know" answer needs no citation.
     """
-    cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", answer)})
+    # "[1]", "[1][2]" and grouped "[1, 3]" are all common LLM styles
+    groups = re.findall(r"\[(\d+(?:\s*,\s*\d+)*)\]", answer)
+    cited = sorted({int(n) for group in groups for n in group.split(",")})
     invalid = [n for n in cited if not 1 <= n <= len(retrieved)]
-    said_dont_know = "don't know" in answer.lower() or "do not know" in answer.lower()
+    text = answer.lower().replace("\u2019", "'")  # LLMs often write a curly apostrophe: don’t
+    said_dont_know = "don't know" in text or "do not know" in text
     return {
         "cited": cited,
         "invalid": invalid,
