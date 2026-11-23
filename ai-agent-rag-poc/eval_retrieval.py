@@ -16,7 +16,8 @@ where you KNOW which fact answers them, check whether search() finds that fact.
 Change the chunking, embedding or MIN_SCORE, re-run, and compare the numbers.
 No API key needed.
 
-Run:  python eval_retrieval.py
+Run:  python eval_retrieval.py            (totals)
+      python eval_retrieval.py --verbose  (one line per question: where the answer ranked)
 """
 
 from rag import VectorStore, load_chunks
@@ -86,7 +87,46 @@ def evaluate(store=None, top_k=3):
     }
 
 
+def question_report(store=None, top_k=3):
+    """One row per labelled question: the answering fact's rank (None = not in the top_k)
+    and the scores, so a tuning change shows WHICH question moved, not just the total."""
+    store = store or VectorStore()
+    rows = []
+    for group, cases in (("eval", EVAL_SET), ("synonym", SYNONYM_SET)):
+        for question, expected in cases:
+            results = store.search(question, top_k=top_k)
+            rank = next((i for i, r in enumerate(results, start=1) if expected in r["text"]), None)
+            rows.append({
+                "group": group,
+                "question": question,
+                "rank": rank,
+                "answer_score": results[rank - 1]["score"] if rank else None,
+                "top_score": results[0]["score"] if results else None,
+            })
+    for question in OUT_OF_SCOPE:
+        results = store.search(question, top_k=top_k)
+        rows.append({"group": "out-of-scope", "question": question, "rank": None, "answer_score": None,
+                     "top_score": results[0]["score"] if results else None})
+    return rows
+
+
+def print_question_report(rows):
+    print(f"  {'group':<13} {'rank':<5} {'answer':<7} {'top':<6} question")
+    for row in rows:
+        if row["group"] == "out-of-scope":
+            rank = "-" if row["top_score"] is None else "LEAK"  # out-of-scope should retrieve nothing
+        else:
+            rank = row["rank"] or "MISS"
+        fmt = lambda score: "-" if score is None else f"{score:.2f}"
+        print(f"  {row['group']:<13} {rank!s:<5} {fmt(row['answer_score']):<7} {fmt(row['top_score']):<6} {row['question']}")
+    print()
+
+
 if __name__ == "__main__":
+    import sys
+
+    if "--verbose" in sys.argv:
+        print_question_report(question_report())
     result = evaluate()
     print(f"Retrieval eval on {len(EVAL_SET)} questions + {len(SYNONYM_SET)} synonym questions + {len(OUT_OF_SCOPE)} out-of-scope questions\n")
     for name in ("hit@1", "recall@3", "no_answer", "synonym_recall@3", "coverage"):

@@ -39,6 +39,7 @@ Measure retrieval quality (no API key needed):
 
 ```bash
 python eval_retrieval.py      # hit@1, recall@3, out-of-scope questions retrieving nothing, coverage
+python eval_retrieval.py --verbose   # plus one line per question: where its answer ranked and the scores
 ```
 
 **Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send (or answers "I don't know" when nothing relevant is found), and step 3 runs each tool on its own. That's handy for a demo with no key.

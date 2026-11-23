@@ -160,6 +160,16 @@ class TestNumericRanges(unittest.TestCase):
         self.assertIn("9 percent", store.search("What rate with a credit score of 650?")[0]["text"])
 
 
+class TestQuestionReport(unittest.TestCase):
+    def test_one_row_per_question_with_rank(self):
+        from eval_retrieval import EVAL_SET, OUT_OF_SCOPE, SYNONYM_SET, question_report
+        rows = question_report()
+        self.assertEqual(len(rows), len(EVAL_SET) + len(SYNONYM_SET) + len(OUT_OF_SCOPE))
+        eval_rows = [r for r in rows if r["group"] == "eval"]
+        self.assertTrue(all(r["rank"] == 1 for r in eval_rows))  # matches hit@1 = 100%
+        self.assertTrue(all(r["top_score"] is None for r in rows if r["group"] == "out-of-scope"))
+
+
 class TestAgentTools(unittest.TestCase):
     def test_get_car_price_is_case_insensitive(self):
         self.assertEqual(get_car_price("model 3")["price_usd"], 42000)
