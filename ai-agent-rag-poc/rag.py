@@ -118,6 +118,9 @@ class VectorStore:
         self.chunks = load_chunks()
         for chunk in self.chunks:
             chunk["vector"] = embed(chunk["text"] + " " + chunk["source"].replace("_", " "))
+            # Parse each chunk's numeric ranges ONCE here, not on every question:
+            # work that depends only on the documents belongs at index time.
+            chunk["ranges"] = numeric_ranges(chunk["text"])
 
     # ---------- Step 2: RETRIEVE ----------
 
@@ -133,7 +136,7 @@ class VectorStore:
         scored = []
         for c in self.chunks:
             score = cosine_similarity(q_vec, c["vector"])
-            in_range = any(low <= n <= high for n in q_numbers for low, high in numeric_ranges(c["text"]))
+            in_range = any(low <= n <= high for n in q_numbers for low, high in c["ranges"])
             if score > 0 and in_range:  # only boosts chunks that already match on words
                 score += NUMERIC_BONUS
             scored.append((score, c))

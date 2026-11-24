@@ -154,6 +154,13 @@ class TestNumericRanges(unittest.TestCase):
         self.assertEqual(numeric_ranges("driven less than 300 miles"), [(-math.inf, 299)])
         self.assertEqual(numeric_ranges("free within 50 miles"), [])  # deliberately not a range
 
+    def test_ranges_are_parsed_once_at_index_time(self):
+        store = VectorStore()
+        with mock.patch("rag.numeric_ranges", side_effect=AssertionError("parsed during search")):
+            store.search("What rate with a credit score of 750?")  # must not re-parse chunks
+        rule = next(c for c in store.chunks if "between 600 and 700" in c["text"])
+        self.assertEqual(rule["ranges"], [(600, 700)])
+
     def test_number_in_range_ranks_the_right_rule_first(self):
         store = VectorStore()
         self.assertIn("6.5 percent", store.search("What rate with a credit score of 750?")[0]["text"])
