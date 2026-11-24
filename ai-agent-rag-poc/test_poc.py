@@ -20,10 +20,11 @@ import llm
 import step3_agent
 from eval_retrieval import evaluate
 from step4_chat import trim_history
-from rag import VectorStore, build_rag_prompt, cosine_similarity, embed, numeric_ranges
+from rag import VectorStore, build_rag_prompt, check_citations, cosine_similarity, embed, numeric_ranges
 from step3_agent import (
     calculate_delivery_cost,
     calculate_monthly_payment,
+    check_return_eligibility,
     check_stock,
     estimate_delivery_dates,
     get_car_price,
@@ -42,6 +43,10 @@ class TestEmbeddings(unittest.TestCase):
         # "does" and "this" used to become "doe" and "thi" and slip past the stop-word list
         vec = embed("Does this cost extra?")
         self.assertEqual(set(vec), {"cost", "extra"})
+
+    def test_synonyms_map_onto_document_words(self):
+        self.assertEqual(embed("refund"), embed("return"))
+        self.assertEqual(embed("financing"), embed("loan"))
 
     def test_stemming_keeps_words_ending_in_ss(self):
         # rstrip("s") used to turn "glass" -> "gla" and "less" -> "le"
@@ -104,6 +109,32 @@ class TestRetrieval(unittest.TestCase):
         self.assertIn("cite its number", prompt)
 
 
+class TestCheckCitations(unittest.TestCase):
+    RETRIEVED = [{"source": "a.txt", "text": "x"}, {"source": "b.txt", "text": "y"}]
+
+    def test_valid_citations(self):
+        check = check_citations("The fee is 2% [1], and returns take 7 days [2].", self.RETRIEVED)
+        self.assertEqual(check, {"cited": [1, 2], "invalid": [], "missing": False, "ok": True})
+
+    def test_citing_a_source_that_was_not_given(self):
+        check = check_citations("The fee is 2% [1][3].", self.RETRIEVED)
+        self.assertEqual(check["invalid"], [3])
+        self.assertFalse(check["ok"])
+
+    def test_no_citations_is_flagged(self):
+        check = check_citations("The fee is 2 percent.", self.RETRIEVED)
+        self.assertTrue(check["missing"])
+        self.assertFalse(check["ok"])
+
+    def test_i_dont_know_needs_no_citation(self):
+        self.assertTrue(check_citations("I don't know.", self.RETRIEVED)["ok"])
+        self.assertTrue(check_citations("I don\u2019t know.", self.RETRIEVED)["ok"])  # curly apostrophe
+
+    def test_grouped_citations_are_read(self):
+        self.assertEqual(check_citations("Fee is 2% and 7 days [1, 2].", self.RETRIEVED)["cited"], [1, 2])
+        self.assertEqual(check_citations("Fee is 2% [1,3].", self.RETRIEVED)["invalid"], [3])
+
+
 class TestRetrievalEval(unittest.TestCase):
     """Guards the eval numbers: a change that makes retrieval worse fails here."""
 
@@ -111,6 +142,7 @@ class TestRetrievalEval(unittest.TestCase):
         result = evaluate()
         self.assertEqual(result["recall@3"], 1.0, result["misses"])
         self.assertEqual(result["no_answer"], 1.0)
+        self.assertEqual(result["synonym_recall@3"], 1.0)
         self.assertEqual(result["hit@1"], 1.0, "a question's answer is no longer ranked first")
         self.assertEqual(result["coverage"], 1.0, f"facts with no eval question: {result['uncovered']}")
 
@@ -122,10 +154,27 @@ class TestNumericRanges(unittest.TestCase):
         self.assertEqual(numeric_ranges("driven less than 300 miles"), [(-math.inf, 299)])
         self.assertEqual(numeric_ranges("free within 50 miles"), [])  # deliberately not a range
 
+    def test_ranges_are_parsed_once_at_index_time(self):
+        store = VectorStore()
+        with mock.patch("rag.numeric_ranges", side_effect=AssertionError("parsed during search")):
+            store.search("What rate with a credit score of 750?")  # must not re-parse chunks
+        rule = next(c for c in store.chunks if "between 600 and 700" in c["text"])
+        self.assertEqual(rule["ranges"], [(600, 700)])
+
     def test_number_in_range_ranks_the_right_rule_first(self):
         store = VectorStore()
         self.assertIn("6.5 percent", store.search("What rate with a credit score of 750?")[0]["text"])
         self.assertIn("9 percent", store.search("What rate with a credit score of 650?")[0]["text"])
+
+
+class TestQuestionReport(unittest.TestCase):
+    def test_one_row_per_question_with_rank(self):
+        from eval_retrieval import EVAL_SET, OUT_OF_SCOPE, SYNONYM_SET, question_report
+        rows = question_report()
+        self.assertEqual(len(rows), len(EVAL_SET) + len(SYNONYM_SET) + len(OUT_OF_SCOPE))
+        eval_rows = [r for r in rows if r["group"] == "eval"]
+        self.assertTrue(all(r["rank"] == 1 for r in eval_rows))  # matches hit@1 = 100%
+        self.assertTrue(all(r["top_score"] is None for r in rows if r["group"] == "out-of-scope"))
 
 
 class TestAgentTools(unittest.TestCase):
@@ -181,6 +230,25 @@ class TestAgentTools(unittest.TestCase):
 
     def test_delivery_rejects_negative_distance(self):
         self.assertIn("error", calculate_delivery_cost(-5))
+
+    def test_return_eligible_with_restocking_fee(self):
+        self.assertEqual(check_return_eligibility(5, 120, False, 42000),
+                         {"eligible": True, "reasons": [], "restocking_fee_usd": 840.0})
+
+    def test_return_boundaries(self):
+        self.assertTrue(check_return_eligibility(7, 299, False)["eligible"])   # day 7 and 299 miles still OK
+        self.assertFalse(check_return_eligibility(8, 0, False)["eligible"])
+        self.assertFalse(check_return_eligibility(1, 300, False)["eligible"])  # "less than 300 miles"
+
+    def test_return_lists_every_reason(self):
+        result = check_return_eligibility(10, 500, True, 30000)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(len(result["reasons"]), 3)
+        self.assertNotIn("restocking_fee_usd", result)
+
+    def test_return_rejects_bad_input(self):
+        self.assertIn("error", check_return_eligibility(-1, 10, False))
+        self.assertIn("error", check_return_eligibility(1, 10, False, car_price=0))
 
     def test_delivery_dates_skip_the_weekend(self):
         # Paid Friday 2026-10-23: 3 business days -> Wed 10-28, 5 -> Fri 10-30

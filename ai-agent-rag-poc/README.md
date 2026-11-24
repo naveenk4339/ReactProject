@@ -6,7 +6,7 @@ A small proof of concept that builds AI up in **4 steps**, one file each. It has
 |------|------|---------|----------------------|
 | 1 | `step1_plain_llm.py` | **LLM** | Text in → text out. Smart, but knows nothing about *your* data. |
 | 2 | `step2_rag.py` | **RAG** | Search your documents first, put the relevant facts in the prompt, then ask the LLM. |
-| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, price and stock lookups, loan and delivery calculators, a delivery date estimator) in a **loop** until i
+| 3 | `step3_agent.py` | **Agent** | The LLM picks **tools** to call (RAG search, price and stock lookups, loan and delivery calculators, a delivery date estimator, a return eligibility check) in a **loop** until i
 | 4 | `step4_chat.py` | **Memory** | LLMs forget everything between calls. Chat "memory" is just sending the whole conversation again each turn (trimmed to the last 10 questions to cap cost). |
 Supporting files: `llm.py` (the only code that calls Claude), `rag.py` (chunking, embeddings, similarity search, relevance threshold), `knowledge_base/*.txt` (the "private" company documents), `eval_retrieval.py` (measures search quality), `test_poc.py` (tests, no API key needed).
 
@@ -39,6 +39,7 @@ Measure retrieval quality (no API key needed):
 
 ```bash
 python eval_retrieval.py      # hit@1, recall@3, out-of-scope questions retrieving nothing, coverage
+python eval_retrieval.py --verbose   # plus one line per question: where its answer ranked and the scores
 ```
 
 **Without an API key**, everything still runs except the LLM call. Step 2 prints the retrieved chunks and the exact prompt it would send (or answers "I don't know" when nothing relevant is found), and step 3 runs each tool on its own. That's handy for a demo with no key.
@@ -78,9 +79,10 @@ Demo: `step1_plain_llm.py`. The model can't know AutoMart's restocking fee.
 - **Embedding**: turn text into a vector of numbers so that similar meanings end up close together. This POC uses simple word counts (`rag.py → embed`) so you can see how it works. Real systems use an embedding model.
 - **Vector database**: stores the vectors and finds the nearest ones quickly (Pinecone, pgvector, Chroma, FAISS, Elasticsearch). Here it's a Python list (`VectorStore`).
 - **Similarity search**: cosine similarity, where 1.0 means "same direction" and 0 means "unrelated".
+- **Synonyms need help too**: customers say "refund", the policy says "return". Word counts miss that, so `rag.py → SYNONYMS` maps a few words onto the documents' words (a tiny form of query expansion). A real embedding model learns this from data.
 - **Numbers need help**: word similarity can't tell that 750 is "above 700", so `search()` adds a small bonus to chunks whose stated range contains a number from the question (`NUMERIC_BONUS`). Real systems do the same with metadata filters or hybrid keyword+vector scoring.
 - **Relevance threshold**: chunks scoring below `MIN_SCORE` (0.2) are dropped, so a question no document covers retrieves nothing instead of loosely related noise. Tune it with `eval_retrieval.py`.
-- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`).
+- **Grounding prompt**: "Answer using ONLY this context; otherwise say I don't know." This cuts down hallucinations. Each fact is numbered and the LLM cites it like `[1]`, so every claim can be checked against its source document (`rag.py → build_rag_prompt`). Asking isn't enough, so step 2 also checks the answer (`check_citations`): it warns if the LLM cites a fact it wasn't given, like `[4]` when only 3 were sent, or cites nothing.
 
 Why RAG instead of fine-tuning? It's cheaper, data updates take effect right away (just re-index), you can show the source of each answer, and you can apply access control per document.
 

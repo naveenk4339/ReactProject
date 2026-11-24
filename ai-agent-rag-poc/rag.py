@@ -45,11 +45,23 @@ def embed(text):
 
     "Cars can be returned within 7 days" -> {"car": 1, "returned": 1, "within": 1, "7": 1, "day": 1}
     A real embedding model returns ~1000 numbers that also capture meaning
-    (so "refund" and "return" end up close together). Ours only matches exact words.
+    (so "refund" and "return" end up close together). Ours only matches exact words,
+    so SYNONYMS maps a few common customer words onto the words our documents use.
     """
     words = re.findall(r"[a-z0-9]+", text.lower())
     words = [w for w in words if w not in STOP_WORDS]  # drop stop words BEFORE stemming ("does" -> "doe" would slip through)
-    return Counter(stem(w) for w in words)
+    return Counter(stem(SYNONYMS.get(w, w)) for w in words)
+
+
+# Customers say "refund", our policy says "return". Mapping a few synonyms onto the
+# documents' words is a tiny version of "query expansion". Applied to documents and
+# questions alike, so both sides end up with the same word.
+SYNONYMS = {
+    "financing": "loan", "finance": "loan",
+    "refund": "return",
+    "guarantee": "warranty",
+    "ship": "delivery", "shipping": "delivery",
+}
 
 
 def stem(word):
@@ -106,6 +118,9 @@ class VectorStore:
         self.chunks = load_chunks()
         for chunk in self.chunks:
             chunk["vector"] = embed(chunk["text"] + " " + chunk["source"].replace("_", " "))
+            # Parse each chunk's numeric ranges ONCE here, not on every question:
+            # work that depends only on the documents belongs at index time.
+            chunk["ranges"] = numeric_ranges(chunk["text"])
 
     # ---------- Step 2: RETRIEVE ----------
 
@@ -121,7 +136,7 @@ class VectorStore:
         scored = []
         for c in self.chunks:
             score = cosine_similarity(q_vec, c["vector"])
-            in_range = any(low <= n <= high for n in q_numbers for low, high in numeric_ranges(c["text"]))
+            in_range = any(low <= n <= high for n in q_numbers for low, high in c["ranges"])
             if score > 0 and in_range:  # only boosts chunks that already match on words
                 score += NUMERIC_BONUS
             scored.append((score, c))
@@ -149,3 +164,25 @@ def build_rag_prompt(question, retrieved):
         f"Context:\n{context}\n\n"
         f"Question: {question}"
     )
+
+
+def check_citations(answer, retrieved):
+    """Check the [n] citations in an LLM answer against the chunks we gave it.
+
+    The prompt ASKS for citations, but nothing forces the LLM to obey. Catch two problems:
+      - invalid: cites [4] when only 3 chunks were given (a made-up source)
+      - missing: no citation at all, so no claim can be checked
+    An "I don't know" answer needs no citation.
+    """
+    # "[1]", "[1][2]" and grouped "[1, 3]" are all common LLM styles
+    groups = re.findall(r"\[(\d+(?:\s*,\s*\d+)*)\]", answer)
+    cited = sorted({int(n) for group in groups for n in group.split(",")})
+    invalid = [n for n in cited if not 1 <= n <= len(retrieved)]
+    text = answer.lower().replace("\u2019", "'")  # LLMs often write a curly apostrophe: don’t
+    said_dont_know = "don't know" in text or "do not know" in text
+    return {
+        "cited": cited,
+        "invalid": invalid,
+        "missing": not cited and not said_dont_know,
+        "ok": not invalid and (bool(cited) or said_dont_know),
+    }
